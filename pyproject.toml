@@ -1,18 +1,44 @@
 [tool.poetry]
-name = "pca-analysis"
+name = "pca_analysis"
 version = "0.1.0"
 description = ""
 authors = ["OctaneOolong <62565951+OctaneOolong@users.noreply.github.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.12"
-tf-nightly = "^2.17.0"
-tensorly = "^0.8.1"
+black = "^24.8.0"
+catppuccin-jupyterlab = "^0.2.4"
+fastexcel = "^0.11.5"
+hvplot = "^0.10.0"
+ipykernel = "^6.29.5"
+isort = "^5.13.2"
+jupyter = "^1.0.0"
+jupyterlab-code-formatter = "^3.0.2"
+jupyterlab-myst = "^2.4.2"
+matplotlib = "^3.9.2"
+nbqa = {extras = ["ruff"], version = "^1.8.7"}
+pathlib = "^1.0.1"
 plotly = "^5.23.0"
-tensorly-viz = "^0.1.7"
+polars = "^1.5.0"
+pyarrow = "^17.0.0"
+pyperclip = "^1.9.0"
+python = "^3.12"
+python-lsp-server = {extras = ["all"], version = "^1.12.0"}
+scikit-learn = "^1.5.1"
+scipy = "^1.14.1"
 tabulate = "^0.9.0"
-
+tensorly = "^0.8.1"
+tensorly-viz = "^0.1.7"
+tf-nightly = "^2.17.0"
+pymatreader = "^1.0.0"
+flox = "^0.9.10"
+corcondia = "^0.1.1"
+myst = "^1.0.4"
+nbconvert = "^7.16.4"
+frontmatter = "^3.0.8"
+great-tables = "^0.11.0"
+jupysql = "^0.10.12"
+toml = "^0.10.2"
 
 [build-system]
 requires = ["poetry-core"]
