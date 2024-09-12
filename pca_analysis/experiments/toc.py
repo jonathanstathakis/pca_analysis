@@ -3,6 +3,7 @@ from nbconvert import MarkdownExporter
 import pandas as pd
 import polars as pl
 from frontmatter import Frontmatter
+from yaml.scanner import ScannerError
 
 
 class Notebook:
@@ -20,7 +21,11 @@ class Notebook:
 
         frontmatter = markdown[0]
 
-        attrs = fm.read(frontmatter)["attributes"]
+        try:
+            attrs = fm.read(frontmatter)["attributes"]
+        except ScannerError as e:
+            e.add_note(f"Error occured when parsing {path}")
+            raise e
 
         if not attrs:
             attrs = {}
@@ -28,26 +33,19 @@ class Notebook:
         return attrs
 
 
-def build_toc(path: Path | str, recursive: bool = True) -> pl.DataFrame:
+def build_toc(paths: list[Path]) -> pl.DataFrame:
     """
     Create a table of contents as a polars dataframe from querying over the ipynb in `path`.
 
     `path` is searched recursively.
     """
-    if not isinstance(recursive, bool):
-        raise ValueError("expect `recursive` to be type `bool`")
-
-    if recursive:
-        glob_str = "**/*.ipynb"
-    elif not recursive:
-        glob_str = "*.ipynb"
-
-    notebooks = list(Path(path).glob(glob_str))
-
-    if not notebooks:
-        raise ValueError(f"No notebooks found at {path}")
-
-    attrs = [Notebook(str(path)).attrs for path in notebooks]
+    attrs = []
+    for path in paths:
+        try:
+            attrs.append(Notebook(str(path)).attrs)
+        except NameError as e:
+            e.add_note(str(path))
+            raise e
 
     toc = pd.DataFrame.from_records(attrs)
 
