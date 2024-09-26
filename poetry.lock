@@ -571,7 +571,7 @@ xmltodict = "^0.13.0"
 type = "git"
 url = "https://github.com/jonathanstathakis/database_etl.git"
 reference = "HEAD"
-resolved_reference = "d011df658863548c3f9d7947a7d016f025f03fbd"
+resolved_reference = "cfedc470cf0d54f4cbb1f5b2508dccc2b5893cba"
 
 [[package]]
 name = "debugpy"
