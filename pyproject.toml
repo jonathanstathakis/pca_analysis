@@ -8,14 +8,11 @@ readme = "README.md"
 [tool.poetry.dependencies]
 black = "^24.8.0"
 ipykernel = "^6.29.5"
-jupyterlab-code-formatter = "^3.0.2"
-jupyterlab-myst = "^2.4.2"
 matplotlib = "^3.9.2"
 polars = "^1.5.0"
 pyarrow = "^17.0.0"
 pyperclip = "^1.9.0"
 python = "^3.12.2"
-python-lsp-server = {extras = ["all"], version = "^1.12.0"}
 scipy = "^1.14.1"
 tensorly = "^0.8.1"
 tensorly-viz = "^0.1.7"
@@ -26,6 +23,10 @@ pytest = "^8.3.3"
 project-toc = {git = "https://github.com/jonathanstathakis/project-toc.git"}
 database-etl = {git = "https://github.com/jonathanstathakis/database_etl.git"}
 xarray = "^2024.9.0"
+duckdb = "^1.1.0"
+numpy = "^2.1.1"
+ipython = "^8.27.0"
+altair = "^5.4.1"
 
 [build-system]
 requires = ["poetry-core"]
