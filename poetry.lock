@@ -2158,6 +2158,26 @@ files = [
 wcwidth = "*"
 
 [[package]]
+name = "protobuf"
+version = "5.28.2"
+description = ""
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "protobuf-5.28.2-cp310-abi3-win32.whl", hash = "sha256:eeea10f3dc0ac7e6b4933d32db20662902b4ab81bf28df12218aa389e9c2102d"},
+    {file = "protobuf-5.28.2-cp310-abi3-win_amd64.whl", hash = "sha256:2c69461a7fcc8e24be697624c09a839976d82ae75062b11a0972e41fd2cd9132"},
+    {file = "protobuf-5.28.2-cp38-abi3-macosx_10_9_universal2.whl", hash = "sha256:a8b9403fc70764b08d2f593ce44f1d2920c5077bf7d311fefec999f8c40f78b7"},
+    {file = "protobuf-5.28.2-cp38-abi3-manylinux2014_aarch64.whl", hash = "sha256:35cfcb15f213449af7ff6198d6eb5f739c37d7e4f1c09b5d0641babf2cc0c68f"},
+    {file = "protobuf-5.28.2-cp38-abi3-manylinux2014_x86_64.whl", hash = "sha256:5e8a95246d581eef20471b5d5ba010d55f66740942b95ba9b872d918c459452f"},
+    {file = "protobuf-5.28.2-cp38-cp38-win32.whl", hash = "sha256:87317e9bcda04a32f2ee82089a204d3a2f0d3c8aeed16568c7daf4756e4f1fe0"},
+    {file = "protobuf-5.28.2-cp38-cp38-win_amd64.whl", hash = "sha256:c0ea0123dac3399a2eeb1a1443d82b7afc9ff40241433296769f7da42d142ec3"},
+    {file = "protobuf-5.28.2-cp39-cp39-win32.whl", hash = "sha256:ca53faf29896c526863366a52a8f4d88e69cd04ec9571ed6082fa117fac3ab36"},
+    {file = "protobuf-5.28.2-cp39-cp39-win_amd64.whl", hash = "sha256:8ddc60bf374785fb7cb12510b267f59067fa10087325b8e1855b898a0d81d276"},
+    {file = "protobuf-5.28.2-py3-none-any.whl", hash = "sha256:52235802093bd8a2811abbe8bf0ab9c5f54cca0a751fdd3f6ac2a21438bffece"},
+    {file = "protobuf-5.28.2.tar.gz", hash = "sha256:59379674ff119717404f7454647913787034f03fe7049cbef1d74a97bb4593f0"},
+]
+
+[[package]]
 name = "psutil"
 version = "6.0.0"
 description = "Cross-platform lib for process and system monitoring in Python."
@@ -2261,6 +2281,28 @@ numpy = ">=1.16.6"
 
 [package.extras]
 test = ["cffi", "hypothesis", "pandas", "pytest", "pytz"]
+
+[[package]]
+name = "pybaselines"
+version = "1.1.0"
+description = "A library of algorithms for the baseline correction of experimental data."
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "pybaselines-1.1.0-py3-none-any.whl", hash = "sha256:b968f5addbca8b1c2b29cf4fb6a8ddf67a932ba92e4caab77fae0879b43d6f97"},
+    {file = "pybaselines-1.1.0.tar.gz", hash = "sha256:1f61ca378459af3983d6ca5813610ca587ac33d5b89e3c03bfb5f692bde61526"},
+]
+
+[package.dependencies]
+numpy = ">=1.20"
+scipy = ">=1.5"
+
+[package.extras]
+dev = ["pybaselines[docs,full,release,test]"]
+docs = ["matplotlib", "numpydoc", "sphinx", "sphinx-autoapi", "sphinx-gallery", "sphinx-rtd-theme"]
+full = ["numba (>=0.49)", "pentapy (>=1.1)"]
+release = ["build", "bump-my-version", "twine"]
+test = ["pytest", "ruff"]
 
 [[package]]
 name = "pycparser"
@@ -3007,6 +3049,59 @@ socks = ["pysocks (>=1.5.6,!=1.5.7,<2.0)"]
 zstd = ["zstandard (>=0.18.0)"]
 
 [[package]]
+name = "vegafusion"
+version = "1.6.9"
+description = "Core tools for using VegaFusion from Python"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "vegafusion-1.6.9-py3-none-any.whl", hash = "sha256:f9e2f193a86c0eec3efe884f75d15232b050597e94f96f9c33ef6d630243178f"},
+    {file = "vegafusion-1.6.9.tar.gz", hash = "sha256:cc24c441b0ee301b2b10a6554ac8b3ab1efc8e9c9886de64a5a4d0881c51b070"},
+]
+
+[package.dependencies]
+altair = ">=5.2.0"
+pandas = "*"
+protobuf = "*"
+psutil = "*"
+pyarrow = ">=5"
+vegafusion-python-embed = {version = "1.6.9", optional = true, markers = "extra == \"embed\""}
+vl-convert-python = {version = ">=0.7.0", optional = true, markers = "extra == \"embed\""}
+
+[package.extras]
+embed = ["vegafusion-python-embed (==1.6.9)", "vl-convert-python (>=0.7.0)"]
+
+[[package]]
+name = "vegafusion-python-embed"
+version = "1.6.9"
+description = "vegafusion-python-embed PyO3 Python Package"
+optional = false
+python-versions = "*"
+files = [
+    {file = "vegafusion_python_embed-1.6.9-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:a778a6d5fd3147be7aaf4f25e27a01c989cd39d0bb896ef36b3ad19b853637b0"},
+    {file = "vegafusion_python_embed-1.6.9-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:90ccc70f98b62c42ca01b7613e5d46993ae1bef54e78a856addf43aff5a77930"},
+    {file = "vegafusion_python_embed-1.6.9-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:75dcc14f1b911f1f6e1dd5d40e43fb33e3cf05dce3e9faa188080a9df2565dac"},
+    {file = "vegafusion_python_embed-1.6.9-cp38-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:a248fc2bd6df198551a5705c3c9b1f11de738bd6e2f184f0e0657d65c01922b1"},
+    {file = "vegafusion_python_embed-1.6.9-cp38-abi3-win_amd64.whl", hash = "sha256:1cc83b9c7fe91493902dae5f4ca90b7692916e5171dfd1feafd23504e9aca3b4"},
+    {file = "vegafusion_python_embed-1.6.9.tar.gz", hash = "sha256:6e339c236c8a15e59898cb4ab490ab3ca40af4657db588d8d766fc1f2ba80c20"},
+]
+
+[[package]]
+name = "vl-convert-python"
+version = "1.6.1"
+description = "Convert Vega-Lite chart specifications to SVG, PNG, or Vega"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "vl_convert_python-1.6.1-cp37-abi3-macosx_10_12_x86_64.whl", hash = "sha256:b531ef9b674530e8aac91682d4db1ae66b616fddfd68f482ea9ceae03dec9e78"},
+    {file = "vl_convert_python-1.6.1-cp37-abi3-macosx_11_0_arm64.whl", hash = "sha256:cf0ede6afa4cdfc39d0649beeedad9b93790d8bbcceab125c0d45b5a6b6e77f3"},
+    {file = "vl_convert_python-1.6.1-cp37-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:28532e54d76a99eedcaec39b98b0b87f09ad24b23a2e129438cfbd27fd0ec001"},
+    {file = "vl_convert_python-1.6.1-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:12d8adb1e243f1f73424506c05adb80b7e99a507c54ca1b8c52122c599d7baaa"},
+    {file = "vl_convert_python-1.6.1-cp37-abi3-win_amd64.whl", hash = "sha256:cafcafc03b2c85925f969f917727b213fb1b6bfb3809b05a673f26f85b0510d0"},
+    {file = "vl_convert_python-1.6.1.tar.gz", hash = "sha256:b70935dbf792118a42aae27b7465359cbc014e30e63ef6ba7a0f8974707d9c1c"},
+]
+
+[[package]]
 name = "wcwidth"
 version = "0.2.13"
 description = "Measures the displayed width of unicode strings in a terminal"
@@ -3164,4 +3259,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12.2"
-content-hash = "f48accca99d91d17f1af131bded3fc28a5be2243578c168c7421f18859a4295e"
+content-hash = "5b16228e4f70d150bba4afd99611bc4749ddc236333105b68f579ec50b70bffc"
