@@ -9,8 +9,10 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
-            "console": "integratedTerminal",
-            "justMyCode": false
+            "console": "internalConsole",
+            "justMyCode": false,
+            "purpose": ["debug-test"],
+            "redirectOutput": true,
         }
     ]
 }

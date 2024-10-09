@@ -21,7 +21,6 @@ corcondia = "^0.1.1"
 great-tables = "^0.11.0"
 pytest = "^8.3.3"
 project-toc = {git = "https://github.com/jonathanstathakis/project-toc.git"}
-database-etl = {git = "https://github.com/jonathanstathakis/database_etl.git"}
 xarray = "^2024.9.0"
 duckdb = "^1.1.0"
 numpy = "^2.1.1"
@@ -29,7 +28,13 @@ ipython = "^8.27.0"
 altair = "^5.4.1"
 vegafusion = {extras = ["embed"], version = "^1.6.9"}
 pybaselines = "^1.1.0"
+database-etl = {path = "../database_etl", develop = true}
+plotly = "^5.24.1"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "INFO"
