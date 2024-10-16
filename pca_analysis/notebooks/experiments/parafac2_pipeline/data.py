@@ -1,0 +1,308 @@
+import polars as pl
+from typing import Self
+from copy import copy
+from pca_analysis.notebooks.experiments.parafac2_pipeline.utility import plot_imgs
+from pca_analysis.notebooks.experiments.parafac2_pipeline.input_data import InputData
+import plotly.graph_objects as go
+from collections import UserList
+from pca_analysis.notebooks.experiments.parafac2_pipeline.pipeline_defs import DCols
+
+
+class XX(UserList):
+    def __init__(self, nm_tbl: pl.DataFrame, time_tbl: pl.DataFrame):
+        X_dict = nm_tbl.drop(DCols.TIME).partition_by(DCols.RUNID, as_dict=True)
+
+        # used for reconstruction
+        self.X_schemas = {
+            runid[0]: df.drop(DCols.RUNID).schema for runid, df in X_dict.items()
+        }
+
+        self.runids = [str(x) for x in self.X_schemas.keys()]
+
+        # time labels by sample
+        self.time_labels = {
+            runid: time_tbl.filter(pl.col(DCols.RUNID) == runid)
+            .select(DCols.TIME)
+            .sort(by=DCols.TIME)
+            for runid in self.X_schemas.keys()
+        }
+
+        self.data = [
+            X.drop(DCols.RUNID).to_numpy(writable=True) for X in X_dict.values()
+        ]
+
+
+class Data:
+    def __init__(
+        self,
+        time_col: str,
+        runid_col: str,
+        nm_col: str,
+        abs_col: str,
+        scalar_cols: list[str],
+    ):
+        """
+        A wrapper for the input test data, providing a method of subsetting, visualisation
+        and transformation into a list of numpy arrays suitable for input into the PARAFAC2
+        function.
+
+        the initialisation will decompose the imgs table into a number of tables - a scalar table of sample-spcific values, a time label table, and a wavelength table. Each is labelled with at least the `runid` acting as the primary key. The wavelength table will be the core table, used for visualisation and later transformation into the PARAFAC2 input X.
+
+        imgs: pl.DataFrame
+            A long, augmented table with columns: `runid`, `mins`, `nm` and `abs`. TestData expects that individual samples are stacked vertically with a unique `runid` labeling each sample and  `mins`, `nm` cols labeling each row. As such, the combination of `runid`, `nm`, and `mins` forms a primary key.
+        scalar_cols: list[str]
+            any label columns in the `imgs` DataFrame that are unique labels such as samplewise runids. These will be organised into a normalised table.
+        nm_col: str
+            the wavelength label column.
+        abs_col: str
+            the absorbance value column.
+        time_col: str
+            the time mode label column, expecting `mins`. This will be used to form a long time label column.
+        runid_col: str
+            The sample id column key.
+        """
+        self._scalar_cols: list[str] = scalar_cols
+        self._time_col: str = time_col
+        self._runid_col: str = runid_col
+        self._nm_col: str = nm_col
+        self._abs_col: str = abs_col
+        self._idx_col: str = "idx"
+
+        # get some stats about the imgs table for process validation
+
+        # mins range
+
+        # wavelength range
+
+    def load_data(self, data: InputData) -> Self:
+        """
+        load the imgs and metadata tables from the data object
+
+        performs preprocessing prior to populating the internals
+
+        :param data: the list-like data object containing the sample data
+        :type data: InputData
+        :raises TypeError: if data is not an InputData object
+        :return: a loaded copy of this object
+        :rtype: Self
+        """
+        if not isinstance(data, InputData):
+            raise TypeError(f"Expecting an InputData object, got {type(data)}")
+
+        self_ = copy(self)
+        imgs, mta = data.to_long_tables()
+        imgs = imgs.pipe(_preprocess_imgs, drop_samples=["82", "0151"])
+
+        self_._load_imgs(imgs)
+        self.mta = mta
+
+        return self_
+
+    def _load_imgs(self, imgs: pl.DataFrame) -> None:
+        """
+        load the preprocessed sample images.
+
+        validates the input, adds a time-based index column and sorts prior to
+        normalising. Once complete sets the flag `_img_loaded` to True in order to track
+        state.
+
+        :param imgs: a long sample-wise unfolded table of sample images.
+        :type imgs: pl.DataFrame
+        """
+        imgs.pipe(self._validate_input_imgs)
+
+        imgs = imgs.with_columns(
+            pl.col("mins").rank("dense").over("runid").sub(1).cast(int).alias("idx")
+        ).sort(self._runid_col, *self._scalar_cols, self._nm_col, self._idx_col)
+
+        imgs.pipe(self._normalise_imgs)
+
+        self._img_loaded = True
+
+    def _validate_input_imgs(self, imgs: pl.DataFrame) -> None:
+        """
+        check if the `imgs` schema matches the expected names datatypes set in the
+        object initialisation.
+
+        :param imgs: a sample-wise unfolded square-ish table of stacked sample images.
+        :type imgs: pl.DataFrame
+        :raises ValueError: if column names dont match expectation
+        :raises TypeError: if column datatypes dont match expectation
+        """
+
+        # check named input columns match table exactly.
+        diff = set(
+            [
+                *self._scalar_cols,
+                self._time_col,
+                self._runid_col,
+                self._nm_col,
+                self._abs_col,
+            ]
+        ).difference(imgs.columns)
+
+        if diff:
+            raise ValueError(
+                f"input column names dont match input table. difference: {diff}"
+            )
+
+        # validate the type schema
+        expected_schema = pl.Schema(
+            {
+                **dict(zip(self._scalar_cols, [str])),
+                self._time_col: float,
+                self._runid_col: str,
+                self._nm_col: int,
+                self._abs_col: float,
+            }
+        )
+
+        # the pairs in the input table that differ from the expectation
+        schema_diff = {
+            k: imgs.schema[k] for k, v in expected_schema.items() if v != imgs.schema[k]
+        }
+
+        if schema_diff:
+            diff_pairs_from_exp = {k: expected_schema[k] for k in schema_diff.keys()}
+            raise TypeError(
+                f"schema mismatch: {schema_diff}, expected: {diff_pairs_from_exp}"
+            )
+
+    def _normalise_imgs(self, imgs: pl.DataFrame) -> None:
+        """
+        Deconstruct `imgs` into a series of normalised tables ala SQL normalisation.
+
+        take the input `imgs` table and decompose it into a scalar, wavelength, and time
+        tables, deleting the input imgs table. Attributes added include:
+
+        - `_time_tbl` contains the unique time labels for the time-wise index.
+        - `_scalar_tbl` contains sample-specific information such as 'id'. One row per sample
+        - `_nm_tbl` contains the image data, including time labels.
+
+        :param imgs: a sample-wise unfolded square-ish table of stacked sample images.
+        :type imgs: pl.DataFrame
+        """
+
+        # a table containing the runwise time mode labels
+        self._time_tbl = imgs.select(
+            self._runid_col, self._idx_col, self._time_col
+        ).unique()
+
+        # a table containing the scalar labels of each sample
+        self._scalar_tbl = imgs.select(self._runid_col, *self._scalar_cols).unique()
+
+        self._nm_tbl = imgs.select(
+            self._runid_col, self._nm_col, self._idx_col, self._time_col, self._abs_col
+        )
+
+    def plot_3d(self) -> go.Figure:
+        """
+        Produce a 3d line plot of all the samples overlaid.
+
+        :raises RuntimeError: if `_nm_tbl` attribute is not present
+        :return: 3d line plot
+        :rtype: go.Figure
+        """
+        if not hasattr(self, "_nm_tbl"):
+            raise RuntimeError("run 'load_imgs' first")
+
+        return plot_imgs(
+            imgs=self._nm_tbl,
+            nm_col=self._nm_col,
+            abs_col=self._abs_col,
+            time_col=self._time_col,
+            runid_col=self._runid_col,
+        )
+
+    def to_X(self) -> XX:
+        """
+        Retuns an XX object, the samples images as a list of numpy arrays sliced
+        samplewise.
+
+        :return: Image data sliced samplewise
+        :rtype: XX
+        """
+
+        return XX(nm_tbl=self.nm_tbl_as_wide(), time_tbl=self._time_tbl)
+
+    def nm_tbl_as_wide(self) -> pl.DataFrame:
+        """
+        return the internal wavelength table as a wide form, with wavelengths as columns.
+
+        :return: samplewise-unfolded image tensor table.
+        :rtype: pl.DataFrame
+        """
+
+        return self._nm_tbl.pivot(
+            index=[self._runid_col, self._time_col],
+            on=self._nm_col,
+            values=self._abs_col,
+        ).sort(self._runid_col, self._time_col)
+
+    def filter_nm_tbl(self, expr: pl.Expr) -> Self:
+        """
+        filter `nm_tbl` based on the input Polars expression. Does no validation of
+        column names so check before inputting.
+
+        TODO: validate expression column names?
+
+        :param expr: A valid Polars expression able to be input into a `DataFrame.filter`
+          method.
+        :type expr: pl.Expr
+        :raises AttributeError: if this is called before `load_imgs`
+        :return: a copy of this object with the nm table filtered.
+        :rtype: Self
+        """
+        if not hasattr(self, "_nm_tbl"):
+            raise AttributeError("no nm_tbl found. Run `load_imgs` first")
+        _data = copy(self)
+        _data._nm_tbl = self._nm_tbl.filter(expr).sort(
+            self._runid_col, self._nm_col, self._time_col
+        )
+
+        return _data
+
+
+def _normalise_imgs(df: pl.DataFrame) -> pl.DataFrame:
+    """
+    Normalise a sample-wise unfolded image tensor table such that each column bar 'abs'
+    is an identifier, and each row is unique.
+
+    Prepares the sample images for further normalisation into seperate tables, sql-like
+
+    :param df: samplewise unfolded image tensor table.
+    :type df: pl.DataFrame
+    :return: normalised image table
+    :rtype: pl.DataFrame
+    """
+    return df.unpivot(
+        index=["runid", "id", "path", "mins"], variable_name="nm", value_name="abs"
+    ).with_columns(pl.col("nm").cast(int))
+
+
+def _remove_samples(df: pl.DataFrame, samples: list[str]) -> pl.DataFrame:
+    """
+    filter out the input samples from the image df.
+
+    :param df: image df
+    :type df: pl.DataFrame
+    :param samples: sample runids to be removed
+    :type samples: list[str]
+    :return: image df without the specified samples
+    :rtype: pl.DataFrame
+    """
+    return df.filter(~pl.col("runid").is_in(samples))
+
+
+def _preprocess_imgs(imgs: pl.DataFrame, drop_samples: list[str]) -> pl.DataFrame:
+    """
+    normnalise and remove specified samples.
+
+    :param imgs: image df
+    :type imgs: pl.DataFrame
+    :param drop_samples: runids of the samples to be removed
+    :type drop_samples: list[str]
+    :return: normalised image df w/o the specified samples
+    :rtype: pl.DataFrame
+    """
+    return imgs.pipe(_normalise_imgs).pipe(_remove_samples, drop_samples)

@@ -6,15 +6,14 @@ authors = ["OctaneOolong <62565951+OctaneOolong@users.noreply.github.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-black = "^24.8.0"
+black = "^24.10.0"
 ipykernel = "^6.29.5"
 matplotlib = "^3.9.2"
-polars = "^1.5.0"
+polars = "^1.9.0"
 pyarrow = "^17.0.0"
 pyperclip = "^1.9.0"
 python = "^3.12.2"
 scipy = "^1.14.1"
-tensorly = "^0.8.1"
 tensorly-viz = "^0.1.7"
 pymatreader = "^1.0.0"
 corcondia = "^0.1.1"
@@ -22,14 +21,16 @@ great-tables = "^0.11.0"
 pytest = "^8.3.3"
 project-toc = {git = "https://github.com/jonathanstathakis/project-toc.git"}
 xarray = "^2024.9.0"
-duckdb = "^1.1.0"
-numpy = "^2.1.1"
+duckdb = "^1.1.1"
+numpy = "^2.1.2"
 ipython = "^8.27.0"
 altair = "^5.4.1"
 vegafusion = {extras = ["embed"], version = "^1.6.9"}
 pybaselines = "^1.1.0"
-database-etl = {path = "../database_etl", develop = true}
+database-etl = {git = "https://github.com/jonathanstathakis/database_etl.git"}
 plotly = "^5.24.1"
+tensorly = {git = "https://github.com/tensorly/tensorly.git"}
+scikit-learn = "^1.5.2"
 
 [build-system]
 requires = ["poetry-core"]
@@ -37,4 +38,4 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
 log_cli = true
-log_cli_level = "INFO"
+log_cli_level = "DEBUG"
