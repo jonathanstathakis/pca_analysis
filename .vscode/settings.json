@@ -1,5 +1,12 @@
 {
     "python.defaultInterpreterPath": "/Users/jonathan/Library/Caches/pypoetry/virtualenvs/pca-analysis-6KQS4gUX-py3.12/bin/python",
     "python.terminal.activateEnvInCurrentTerminal": true,
-    "python.terminal.activateEnvironment": true
+    "python.terminal.activateEnvironment": true,
+    "python.testing.pytestArgs": [
+        "tests"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "python.experiments.enabled": true,
+    "python.experiments.optInto": ["pythonTestAdapter"]
 }
