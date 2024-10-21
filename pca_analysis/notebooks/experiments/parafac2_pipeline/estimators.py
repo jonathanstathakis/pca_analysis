@@ -26,7 +26,7 @@ class PARAFAC2(TransformerMixin, BaseEstimator):
 
     def __init__(
         self,
-        rank: int,
+        rank: int = 5,
         n_iter_max: int = 2000,
         init: str = "random",
         svd: str = "truncated_svd",
@@ -40,6 +40,9 @@ class PARAFAC2(TransformerMixin, BaseEstimator):
         n_iter_parafac: int = 5,
         linesearch: bool = True,
     ):
+        """
+        TODO: docstring
+        """
         self.rank = rank
         self.n_iter_max = n_iter_max
         self.init = init

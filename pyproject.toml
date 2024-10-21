@@ -39,3 +39,6 @@ build-backend = "poetry.core.masonry.api"
 [tool.pytest.ini_options]
 log_cli = true
 log_cli_level = "DEBUG"
+
+[tool.poetry.scripts]
+test_pipeline_cache = "tests.test_pipeline._test_pipeline_cache:start"

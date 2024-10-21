@@ -783,6 +783,9 @@ class Parafac2Results:
         :rtype: pl.DataFrame
         """
         return self._con.execute(f"describe {table}").pl()
+    
+    def results_dashboard(self):
+        """return a Dash dashboard"""
 
 
 def _proof_that_my_computations_match_tly(

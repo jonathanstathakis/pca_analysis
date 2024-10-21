@@ -10,6 +10,8 @@ from pca_analysis.notebooks.experiments.parafac2_pipeline.pipeline import (
 from pca_analysis.notebooks.experiments.parafac2_pipeline.pipeline_defs import DCols
 from pca_analysis.notebooks.experiments.parafac2_pipeline.input_data import InputData
 import logging
+from copy import copy
+from typing import Self
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,8 @@ class Orchestrator:
         self.input_data = Data(**get_data_col_input())  # ignore
         self._logfile = Path(__file__).parent / "pipeline_log"
 
+        self.results = None
+
     def load_data(
         self, con: db.DuckDBPyConnection, runids: list[str], filter_expr=None
     ):
@@ -71,9 +75,24 @@ class Orchestrator:
             expr=filter_expr
         )
 
+    def get_pipeline(self) -> Self:
+        _orc = copy(self)
+        _orc._pipeline = create_pipeline()
+
+        return _orc
+
+    def set_params(self, params: dict) -> Self:
+        _orc = copy(self)
+
+        _orc._pipeline.set_params(**params)
+        return _orc
+
     def run_pipeline(
-        self, filter_expr=None, rank=9, output_con: db.DuckDBPyConnection = db.connect()
-    ) -> Parafac2Results:
+        self,
+        filter_expr=None,
+        create_datamart: bool = True,
+        output_con: db.DuckDBPyConnection = db.connect(),
+    ) -> Self:
         """
         run the pipeline from end to end
 
@@ -94,26 +113,28 @@ class Orchestrator:
         """
         logger.info("running pipeline..")
 
-        self._con_output = output_con
+        _orc = copy(self)
+
+        _orc._con_output = output_con
 
         if filter_expr:
-            self.input_data = self.input_data.filter_nm_tbl(filter_expr)
+            _orc.input_data = _orc.input_data.filter_nm_tbl(filter_expr)
 
-        self._pipeline = create_pipeline(rank=rank)
-
-        X = self.input_data.to_X()
+        X = _orc.input_data.to_X()
 
         # to capture print for logs. See <https://johnpaton.net/posts/redirect-logging/>
         import contextlib
 
-        with open(self._logfile, "w") as h, contextlib.redirect_stdout(h):
-            self._decomp = self._pipeline.fit_transform(X)
+        with open(_orc._logfile, "w") as h, contextlib.redirect_stdout(h):
+            _orc._decomp = _orc._pipeline.fit_transform(X)
 
-        self.results = Parafac2Results(con=self._con_output, decomp=self._decomp)
+        _orc.results = Parafac2Results(con=_orc._con_output, decomp=_orc._decomp)
 
         # display last two lines of the fit report (PARAFAC2)
-        with open(self._logfile, "r") as f:
+        with open(_orc._logfile, "r") as f:
             logger.info("\n".join(f.readlines()[-2:]))
 
-        self.results.create_datamart(input_imgs=X)
-        return self.results
+        if create_datamart:
+            _orc.results.create_datamart(X)
+
+        return _orc
