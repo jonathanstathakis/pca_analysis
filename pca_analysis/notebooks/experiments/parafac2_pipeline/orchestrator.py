@@ -29,7 +29,7 @@ def get_data_col_input():
 
 
 class Orchestrator:
-    def __init__(self):
+    def __init__(self, exec_id: str):
         """PARAFAC2 decomposition pipeline control singleton.
 
         Instructions For Use
@@ -47,6 +47,7 @@ class Orchestrator:
         ----
         - [ ] add preprocessing stages i.e. baseline subtraction
         """
+        self._exec_id = exec_id
         self.input_data = Data(**get_data_col_input())  # ignore
         self._logfile = Path(__file__).parent / "pipeline_log"
 
@@ -147,7 +148,9 @@ class Orchestrator:
         with open(_orc._logfile, "w") as h, contextlib.redirect_stdout(h):
             _orc._decomp = _orc._pipeline.fit_transform(X)
 
-        _orc.results = Parafac2Results(conn=_orc._con_output, decomp=_orc._decomp)
+        _orc.results = Parafac2Results(
+            conn=_orc._con_output, decomp=_orc._decomp, exec_id=self._exec_id
+        )
 
         # display last two lines of the fit report (PARAFAC2)
         with open(_orc._logfile, "r") as f:
