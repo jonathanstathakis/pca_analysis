@@ -1,11 +1,11 @@
 import polars as pl
 from typing import Self
-from copy import copy
 from pca_analysis.notebooks.experiments.parafac2_pipeline.utility import plot_imgs
 from pca_analysis.notebooks.experiments.parafac2_pipeline.input_data import InputData
 import plotly.graph_objects as go
 from collections import UserList
 from pca_analysis.notebooks.experiments.parafac2_pipeline.pipeline_defs import DCols
+from copy import deepcopy
 
 
 class XX(UserList):
@@ -77,14 +77,17 @@ class Data:
         self._nm_col: str = nm_col
         self._abs_col: str = abs_col
         self._idx_col: str = "idx"
-
+        self.mta = pl.DataFrame()
+        self._loaded: bool = False
         # get some stats about the imgs table for process validation
 
         # mins range
 
         # wavelength range
 
-    def load_data(self, data: InputData) -> Self:
+    def load_data(
+        self, data: InputData, drop_samples: list[str] = ["82", "0151"]
+    ) -> Self:
         """
         load the imgs and metadata tables from the data object
 
@@ -99,36 +102,45 @@ class Data:
         if not isinstance(data, InputData):
             raise TypeError(f"Expecting an InputData object, got {type(data)}")
 
-        self_ = copy(self)
+        self_ = deepcopy(self)
         imgs, mta = data.to_long_tables()
-        imgs = imgs.pipe(_preprocess_imgs, drop_samples=["82", "0151"])
+        imgs = imgs.pipe(_preprocess_imgs, drop_samples)
 
         self_._load_imgs(imgs)
-        self.mta = mta
+        self_.mta = mta
 
+        self_._loaded = True
         return self_
 
     def __repr__(self):
-        repr_str = f"""
-        Data
-        ----
+        repr_str = ""
+        if hasattr(self, "_loaded"):
+            repr_str = f"""
+            Data
+            ----
 
-        Metadata
-        --------
-        num. samples: {self.mta.shape[0]}
-        num. metadata fields: {self.mta.shape[1]}
-        metadata fields:
-        {self.mta.columns}
+            Metadata
+            --------
+            num. samples: {self.mta.shape[0]}
+            num. metadata fields: {self.mta.shape[1]}
+            metadata fields:
+            {self.mta.columns}
 
-        Images
-        ------
-        time_points: {self._time_tbl.shape[0]}
-        wavelengths: {self._nm_tbl.shape[1]}
+            NM TBL
+            ------
 
+            time_points: {self._nm_tbl.shape[0]}
+            wavelengths: {self._nm_tbl.shape[1]}
 
+            columns: {self._nm_tbl.columns}
 
+            ranges:
+                idx: {self._nm_tbl[DCols.IDX].min(), self._nm_tbl[DCols.IDX].max()}
+                wavelength: {self._nm_tbl[DCols.NM].min(), self._nm_tbl[DCols.NM].max()}
+            """
 
-        """
+        else:
+            repr_str = "no data loaded, nothing to display."
 
         return repr_str
 
@@ -289,7 +301,8 @@ class Data:
         """
         if not hasattr(self, "_nm_tbl"):
             raise AttributeError("no nm_tbl found. Run `load_imgs` first")
-        _data = copy(self)
+
+        _data = deepcopy(self)
         _data._nm_tbl = self._nm_tbl.filter(expr).sort(
             self._runid_col, self._nm_col, self._time_col
         )
