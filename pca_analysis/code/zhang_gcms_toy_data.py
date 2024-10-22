@@ -17,7 +17,7 @@ def get_zhang_data():
     idx_start, idx_end = _calculate_zhang_slice(full_data['time'])
     
     sliced_data = full_data.isel(time=slice(idx_start,idx_end))
-    sliced_data.isel(sample=0).plot.line(x="time", add_legend=False);
+    sliced_data.isel(sample=0).plot.line(x="time", add_legend=False)
 
     return sliced_data
     

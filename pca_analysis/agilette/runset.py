@@ -1,4 +1,3 @@
-from .run import Run
 import duckdb as db
 
 

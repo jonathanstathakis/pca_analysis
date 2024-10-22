@@ -1,4 +1,3 @@
-import duckdb as db
 import polars as pl
 
 # from collections import UserDict
@@ -32,7 +31,7 @@ def move_id_path_to_mta(sample):
     img = sample[0]
     mta = sample[1]
     path = img["path"][0]
-    id = img["id"][0]
+    img["id"][0]
     mta = mta.with_columns(pl.lit(path).alias("path"))
     img = img.drop(["path", "id"])
     # sample[0] = sample[0].

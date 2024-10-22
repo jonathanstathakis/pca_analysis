@@ -20,7 +20,7 @@ class Run:
         """
         TODO: add select columns, select rows to options to speed up read times.
         """
-        columns = ["mins"] + wavelengths
+        ["mins"] + wavelengths
         return get_img(
             path=str(self.img_path),
             runid=self.runid,

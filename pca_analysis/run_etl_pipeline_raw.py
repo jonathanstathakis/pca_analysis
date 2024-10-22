@@ -3,7 +3,7 @@ While I would normally contain this within a notebook, it seems to causing th ke
 """
 
 import logging
-
+import polars as pl
 import duckdb as db
 from database_etl import etl_pipeline_raw
 
@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(encoding="utf-8", level=logging.INFO)
 con = db.connect(DB_PATH_UV)
 
-import polars as pl
 pl.Config.set_tbl_rows(99)
 overwrite = True
 
