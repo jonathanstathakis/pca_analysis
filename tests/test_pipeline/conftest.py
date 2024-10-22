@@ -1,8 +1,6 @@
 import pytest
 import duckdb as db
-from pca_analysis.definitions import DB_PATH_UV
-from pca_analysis.code.get_sample_data import get_ids_by_varietal
-from database_etl.etl.etl_pipeline_raw import get_data
+from tests.test_definitions import TEST_DB_PATH
 import polars as pl
 from pca_analysis.notebooks.experiments.parafac2_pipeline.data import Data, XX
 from pca_analysis.notebooks.experiments.parafac2_pipeline.input_data import InputData
@@ -11,7 +9,6 @@ from pca_analysis.notebooks.experiments.parafac2_pipeline.orchestrator import (
     Orchestrator,
 )
 from pathlib import Path
-import pickle
 from pca_analysis.notebooks.experiments.parafac2_pipeline.estimators import PARAFAC2
 
 from pca_analysis.notebooks.experiments.parafac2_pipeline.parafac2results import (
@@ -29,13 +26,15 @@ logger = logging.getLogger(__name__)
 
 @pytest.fixture(scope="module")
 def datacon():
-    return db.connect(DB_PATH_UV, read_only=True)
+    return db.connect(TEST_DB_PATH, read_only=True)
 
 
 @pytest.fixture(scope="module")
-def test_sample_ids(datacon, varietal="shiraz"):
+def test_sample_ids(datacon):
     """get test sample ids"""
-    return get_ids_by_varietal(varietal=varietal, con=datacon)
+    ids = [x[0] for x in datacon.execute("select runid from inc_chm").fetchall()]
+
+    return ids
 
 
 @pytest.fixture(scope="module")
@@ -44,7 +43,7 @@ def input_data(
     test_sample_ids,
 ) -> InputData:
     """the test sample data collection object"""
-    return InputData(con=datacon, ids=test_sample_ids)
+    return InputData(conn=datacon, ids=test_sample_ids)
 
 
 @pytest.fixture(scope="module")
@@ -57,7 +56,8 @@ def testdata(input_data: InputData) -> Data:
             nm_col=DCols.NM,
             abs_col=DCols.ABS,
             scalar_cols=[DCols.PATH, DCols.ID],
-        ).load_data(input_data)
+        )
+        .load_data(input_data)
         .filter_nm_tbl(
             pl.col(DCols.TIME).is_between(0, 0.5)
             & pl.col(DCols.NM).is_between(250, 256)

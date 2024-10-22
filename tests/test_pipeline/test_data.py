@@ -1,4 +1,3 @@
-import pytest
 from pca_analysis.notebooks.experiments.parafac2_pipeline.data import Data
 
 

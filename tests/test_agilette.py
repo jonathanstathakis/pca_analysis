@@ -1,9 +1,8 @@
 import pytest
 from pca_analysis.agilette import Agilette, create_database
-from . import test_definitions as test_defs
 from pathlib import Path
 import duckdb as db
-from pca_analysis import definitions as defs
+import logging
 
 
 @pytest.fixture
@@ -37,8 +36,6 @@ def create_agilette_database(
 
     return test_db_path
 
-
-import logging
 
 logger = logging.getLogger(__name__)
 

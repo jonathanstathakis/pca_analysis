@@ -24,7 +24,6 @@ def test_get_img(run: Run):
     assert not img.is_empty()
 
 
-from IPython.display import display
 
 
 def test_plot_chromatogram(run: Run):
