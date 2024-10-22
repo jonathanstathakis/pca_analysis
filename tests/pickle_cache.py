@@ -118,9 +118,11 @@ class PickleCache:
 
     def remove_cached_obj(self, key):
         """remove the cached object at `key`"""
-
+        
         logger.debug(f"deleting {key}..")
         Path(self._get_pickle_path(key)).unlink()
+        self.cached.remove(key)
+        logger.info(self)
 
     def clear_cache(self):
         """clear the cache"""
@@ -135,9 +137,19 @@ class PickleCache:
         # remove the cache dir
         Path(self._cache_root).rmdir()
 
+        self.cached = []
+
         logger.debug("cache cleared.")
 
     def __repr__(self):
+        if self.cached:
+            cached_str = """
+        keys:
+        
+        {"- " + self.cached[0] + "\n" + "- ".join(self.cached[1:])}
+        """
+        else:
+            cached_str = ""
         repr_str = f"""
         {self._cache_name}
         {"-"*len(self._cache_name)}
@@ -145,10 +157,7 @@ class PickleCache:
         dirpath: {self._cache_root}
 
         items in cache: {len(self.cached)}
-        
-        keys:
-        
-        {"- " + self.cached[0] + "\n" + "- ".join(self.cached[1:])}
+        {cached_str}
         """
 
         return repr_str
