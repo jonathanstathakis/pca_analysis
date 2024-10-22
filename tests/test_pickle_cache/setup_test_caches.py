@@ -1,7 +1,6 @@
 from pathlib import Path
 import pickle
 import logging
-import sys
 import argparse
 
 logger = logging.getLogger()

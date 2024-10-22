@@ -53,7 +53,7 @@ def test_get_bin_pump_tables(
     assert not solvcomp.empty
     assert not timetable.empty
 
-    outpath = Path(sample_45).parent
+    Path(sample_45).parent
 
     solvcomp.to_csv(solvcomp_45_df_path, index=False)
     timetable.to_csv(timetable_45_df_path, index=False)
