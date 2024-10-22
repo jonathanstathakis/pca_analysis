@@ -52,6 +52,25 @@ class Orchestrator:
 
         self.results = None
 
+    def __repr__(self):
+        repr_str = f"""
+        Orchestrator
+        ------------
+        ------------
+
+        Input Data
+        ----------
+        
+        {str(self.input_data)}
+
+        Results
+        -------
+
+        {str(self.results)}
+        """
+
+        return repr_str
+
     def load_data(
         self, con: db.DuckDBPyConnection, runids: list[str], filter_expr=None
     ):
@@ -128,7 +147,7 @@ class Orchestrator:
         with open(_orc._logfile, "w") as h, contextlib.redirect_stdout(h):
             _orc._decomp = _orc._pipeline.fit_transform(X)
 
-        _orc.results = Parafac2Results(con=_orc._con_output, decomp=_orc._decomp)
+        _orc.results = Parafac2Results(conn=_orc._con_output, decomp=_orc._decomp)
 
         # display last two lines of the fit report (PARAFAC2)
         with open(_orc._logfile, "r") as f:
