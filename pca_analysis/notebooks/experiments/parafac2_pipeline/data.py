@@ -42,22 +42,32 @@ class Data:
         scalar_cols: list[str],
     ):
         """
-        A wrapper for the input test data, providing a method of subsetting, visualisation
-        and transformation into a list of numpy arrays suitable for input into the PARAFAC2
-        function.
+        A wrapper for the input test data, providing a method of subsetting,
+        visualisation and transformation into a list of numpy arrays suitable for input
+        into the PARAFAC2 function.
 
-        the initialisation will decompose the imgs table into a number of tables - a scalar table of sample-spcific values, a time label table, and a wavelength table. Each is labelled with at least the `runid` acting as the primary key. The wavelength table will be the core table, used for visualisation and later transformation into the PARAFAC2 input X.
+        the initialisation will decompose the imgs table into a number of tables - a
+        scalar table of sample-spcific values, a time label table, and a wavelength
+        table. Each is labelled with at least the `runid` acting as the primary key. The
+        wavelength table will be the core table, used for visualisation and later
+        transformation into the PARAFAC2 input X.
 
         imgs: pl.DataFrame
-            A long, augmented table with columns: `runid`, `mins`, `nm` and `abs`. TestData expects that individual samples are stacked vertically with a unique `runid` labeling each sample and  `mins`, `nm` cols labeling each row. As such, the combination of `runid`, `nm`, and `mins` forms a primary key.
+            A long, augmented table with columns: `runid`, `mins`, `nm` and `abs`.
+            TestData expects that individual samples are stacked vertically with a
+            unique `runid` labeling each sample and  `mins`, `nm` cols labeling each
+            row. As such, the combination of `runid`, `nm`, and `mins` forms a primary
+            key.
         scalar_cols: list[str]
-            any label columns in the `imgs` DataFrame that are unique labels such as samplewise runids. These will be organised into a normalised table.
+            any label columns in the `imgs` DataFrame that are unique labels such as
+            samplewise runids. These will be organised into a normalised table.
         nm_col: str
             the wavelength label column.
         abs_col: str
             the absorbance value column.
         time_col: str
-            the time mode label column, expecting `mins`. This will be used to form a long time label column.
+            the time mode label column, expecting `mins`. This will be used to form a
+            long time label column.
         runid_col: str
             The sample id column key.
         """
@@ -97,6 +107,30 @@ class Data:
         self.mta = mta
 
         return self_
+
+    def __repr__(self):
+        repr_str = f"""
+        Data
+        ----
+
+        Metadata
+        --------
+        num. samples: {self.mta.shape[0]}
+        num. metadata fields: {self.mta.shape[1]}
+        metadata fields:
+        {self.mta.columns}
+
+        Images
+        ------
+        time_points: {self._time_tbl.shape[0]}
+        wavelengths: {self._nm_tbl.shape[1]}
+
+
+
+
+        """
+
+        return repr_str
 
     def _load_imgs(self, imgs: pl.DataFrame) -> None:
         """
