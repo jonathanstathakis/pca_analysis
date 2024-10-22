@@ -32,6 +32,9 @@ plotly = "^5.24.1"
 tensorly = {git = "https://github.com/tensorly/tensorly.git"}
 scikit-learn = "^1.5.2"
 
+dash = "^2.18.1"
+dash-bootstrap-components = "^1.6.0"
+waitress = "^3.0.0"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
@@ -39,6 +42,8 @@ build-backend = "poetry.core.masonry.api"
 [tool.pytest.ini_options]
 log_cli = true
 log_cli_level = "DEBUG"
+log_format = "%(asctime)s [%(levelname)s] %(message)s (%(filename)s:%(lineno)s)"
+log_date_format = "%Y-%m-%d %H:%M:%S"
 
 [tool.poetry.scripts]
 test_pipeline_cache = "tests.test_pipeline._test_pipeline_cache:start"
