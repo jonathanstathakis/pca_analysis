@@ -10,6 +10,7 @@ import logging
 from pca_analysis.notebooks.experiments.parafac2_pipeline.data import XX
 from numpy.typing import NDArray
 
+pl.Config.set_tbl_width_chars(999)
 logger = logging.getLogger(__name__)
 
 
@@ -30,10 +31,13 @@ def apply_projections(
     return A, Bs, C
 
 
-class Parafac2Results:
+class Pfac2Loader:
     def __init__(
-        self, decomp: Parafac2Tensor, conn: db.DuckDBPyConnection = db.connect()
-    ) -> None:
+        self,
+        exec_id: str,
+        decomp: Parafac2Tensor,
+        conn: db.DuckDBPyConnection = db.connect(),
+    ):
         """
         generate a sql datamart for the decomposition results. After initialisation call
         `.ceate_datamart()` to establish the base state then use the various `viz` and
@@ -44,8 +48,8 @@ class Parafac2Results:
         :param con: conn to the db containing the results, defaults to db.connect()
         :type con: db.DuckDBPyConnection, optional
         """
-
-        self._con = conn
+        self._exec_id = exec_id
+        self._conn = conn
         self._decomp = decomp
 
         self._A, self._Bs, self._C = apply_projections(self._decomp)
@@ -86,6 +90,44 @@ class Parafac2Results:
 
         return repr_str
 
+    def create_datamart(
+        self,
+        runids: list[str],
+    ) -> Self:
+        """setup the base state of the data mart
+
+        :param input_imgs: the input images, each sample as a slice.
+        :type input_imgs: XX
+        TODO: define handling of the input images
+        """
+
+        logger.debug("loading parafac2 results..")
+
+        self._create_exec_id_tbl()
+        self._create_component_table()
+        self._create_sample_table(runids=runids)
+        self._create_table_A()
+        self._create_table_B()
+        self._create_table_C()
+        self._create_component_slices_table()
+        self._create_recon_slices()
+
+        logger.debug("parafac2 results loaded.")
+
+        return self
+
+    def _create_exec_id_tbl(self):
+        """creates a exec_id table containing the exec_ids"""
+
+        query = """--sql
+        create table if not exists exec_id (
+        exec_id varchar primary key,
+        );
+        insert or replace into exec_id values (?)
+        """
+
+        self._conn.execute(query, parameters=[self._exec_id])
+
     def _create_component_table(self):
         """
         create a 'components' table containing the 'component' primary keys only.
@@ -94,21 +136,29 @@ class Parafac2Results:
         """
 
         logger.debug("writing component table to db..")
-        component_df = pl.DataFrame({"component": np.arange(0, self.n_components, 1)})
+        component_df = pl.DataFrame(
+            {"component": np.arange(0, self.n_components, 1)}
+        ).with_columns(pl.lit(self._exec_id).alias("exec_id"))
         component_df.shape
 
-        self._con.execute(
+        self._conn.execute(
             """--sql
-            create table components (
-                component integer primary key
+            create table if not exists components (
+                exec_id varchar references exec_id(exec_id),
+                component integer unique not null,
+                primary key (exec_id, component)
             );
+            """
+        )
+
+        self._conn.execute("""--sql
             insert into components
                 select
+                    exec_id,
                     component
                 from
                     component_df
-        """
-        )
+                    """)
 
     def _create_table_A(self):
         """
@@ -123,18 +173,20 @@ class Parafac2Results:
             )
             .with_row_index("sample")
             .unpivot(index=["sample"], variable_name="component", value_name="weight")
-        )
+        ).with_columns(pl.lit(self._exec_id).alias("exec_id"))
         A_df.shape
 
         query = """--sql
         create table A (
+        exec_id varchar references exec_id(exec_id),
         sample int references samples(sample),
         component int references components(component),
         weight float not null,
-        primary key (sample, component)
+        primary key (exec_id, sample, component)
         );
         insert into A
             select
+                exec_id,
                 sample,
                 component,
                 weight
@@ -142,7 +194,7 @@ class Parafac2Results:
                 A_df
         """
 
-        self._con.execute(query)
+        self._conn.execute(query)
 
     def _create_sample_table(self, runids: list[str]):
         """write a table containing the unique sample ids
@@ -153,17 +205,19 @@ class Parafac2Results:
         logger.debug("writing sample table..")
         sample_df = pl.DataFrame(
             {"sample": np.arange(0, len(runids), 1), "runid": runids}
-        )
+        ).with_columns(pl.lit(self._exec_id).alias("exec_id"))
         sample_df.shape
 
-        self._con.execute("""--sql
-                          create table samples (
+        self._conn.execute("""--sql
+                          create table if not exists samples (
+                            exec_id varchar references exec_id(exec_id),
                           sample int,
                           runid varchar,
                           primary key (sample)
                           );
-                          insert into samples
+                          insert or replace into samples
                             select
+                                exec_id, 
                                 sample,
                                 runid
                             from
@@ -189,22 +243,25 @@ class Parafac2Results:
                     value_name="value",
                 )
                 .with_columns(pl.col("component").str.replace("column_", "").cast(int))
+                .with_columns(pl.lit(self._exec_id).alias("exec_id"))
             )
             B_dfs.append(df)
         B_df = pl.concat(B_dfs)
 
         try:
             query = """--sql
-            create table B_pure (
+            create table if not exists B_pure (
+            exec_id varchar references exec_id(exec_id),
             sample integer not null references samples(sample),
             component int not null references components(component),
             elution_point int not null,
             value float not null,
-            primary key (sample, component, elution_point)
+            primary key (exec_id, sample, component, elution_point)
             );
             
-            insert into B_pure
+            insert or replace into B_pure
                 select
+                    exec_id,
                     sample,
                     component,
                     elution_point,
@@ -220,7 +277,7 @@ class Parafac2Results:
             e.add_note(str(description_of_index_cols))
             raise e
 
-        self._con.execute(query)
+        self._conn.execute(query)
 
     def _create_table_C(self):
         """create the C table, the spectral profile of the components"""
@@ -233,19 +290,22 @@ class Parafac2Results:
                 index="spectral_point", variable_name="component", value_name="value"
             )
             .with_columns(pl.col("component").str.replace("column_", "").cast(int))
+            .with_columns(pl.lit(self._exec_id).alias("exec_id"))
         )
         C_df.shape
         # insert it into the db
 
-        self._con.execute("""--sql
-        create table C_pure (
+        self._conn.execute("""--sql
+        create table if not exists C_pure (
+                            exec_id varchar,
                           component integer not null references components(component),
                           spectral_point int not null,
                           value float not null,
-                          primary key (component, spectral_point)
+                          primary key (exec_id, component, spectral_point)
         );
-        insert into C_pure
+        insert or replace into C_pure
             select
+                exec_id,
                 component,
                 spectral_point,
                 value
@@ -354,21 +414,25 @@ class Parafac2Results:
                     self._create_component_tensor_df(slice, sample_idx, component_idx)
                 )
 
-        component_df = pl.concat(flat_dfs)
+        component_df = pl.concat(flat_dfs).with_columns(
+            pl.lit(self._exec_id).alias("exec_id")
+        )
         len(component_df)  # quiet pylance
 
         # load into db
-        self._con.sql("""--sql
+        self._conn.sql("""--sql
         create table sample_components (
+            exec_id varchar references exec_id(exec_id),
             sample int references samples(sample),
             component int references components(component),
             wavelength_point int not null,
             elution_point int not null,
             abs float not null,
-            primary key (sample, component, wavelength_point, elution_point)
+            primary key (exec_id, sample, component, wavelength_point, elution_point)
         );
         insert into sample_components
-            select
+            select 
+                exec_id,
                 sample,
                 component,
                 wavelength_point,
@@ -388,14 +452,15 @@ class Parafac2Results:
 
         # join all the tables together and sum. This can be done by pivoting on component
 
-        self._con.sql(
+        self._conn.sql(
             """--sql
         create or replace table sample_recons (
+        exec_id varchar references exec_id(exec_id),
         sample int references samples(sample),
         wavelength_point int not null,
         elution_point int not null,
         abs float not null,
-        primary key (sample, wavelength_point, elution_point)
+        primary key (exec_id, sample, wavelength_point, elution_point)
         );
         with
             piv as (
@@ -412,35 +477,16 @@ class Parafac2Results:
             )
             insert into sample_recons
                 select
+                    exec_id,
                     sample,
                     wavelength_point,
                     elution_point,
                     -- horizontal sum
-                    list_sum(list_value(*columns(* exclude(sample, wavelength_point, elution_point)))) as abs 
+                    list_sum(list_value(*columns(* exclude(exec_id, sample, wavelength_point, elution_point)))) as abs 
                 from
                     piv
         """
         )
-
-    def create_datamart(self, input_imgs: XX) -> Self:
-        """setup the base state of the data mart
-
-        :param input_imgs: the input images, each sample as a slice.
-        :type input_imgs: XX
-        """
-
-        logger.debug("creating datamart")
-
-        self._create_component_table()
-        self._create_sample_table(runids=input_imgs.runids)
-        self._create_table_A()
-        self._create_table_B()
-        self._create_table_C()
-        self._load_input_images(imgs=input_imgs)
-        self._create_component_slices_table()
-        self._create_recon_slices()
-
-        return self
 
     def _load_input_images(self, imgs: XX):
         """
@@ -472,7 +518,7 @@ class Parafac2Results:
         input_img_df = pl.concat(dfs)
         len(input_img_df)
         # load into db
-        self._con.execute(
+        self._conn.execute(
             """--sql
         create table input_imgs (
             sample int references samples(sample),
@@ -492,6 +538,11 @@ class Parafac2Results:
         """
         )
 
+
+class Parafac2Results:
+    def __init__(self, conn: db.DuckDBPyConnection) -> None:
+        self._conn = conn
+
     def _viz_overlay_components_sample_wavelength(
         self, sample: int, wavelength: int
     ) -> go.Figure:
@@ -508,7 +559,7 @@ class Parafac2Results:
 
         # get the subset
 
-        df = self._con.execute(
+        df = self._conn.execute(
             """--sql
             select
                 sample,
@@ -541,7 +592,7 @@ class Parafac2Results:
         :rtype: go.Figure
         """
 
-        df = self._con.execute(
+        df = self._conn.execute(
             """--sql
             select
                 sample,
@@ -597,7 +648,7 @@ class Parafac2Results:
     def viz_recon_input_overlay(self, sample, wavelength):
         """plot the reconstruction against the input curve for a given sample and wavelength"""
 
-        signals = self._con.execute(
+        signals = self._conn.execute(
             """--sql
             with
                 joined as (
@@ -649,6 +700,7 @@ class Parafac2Results:
         :rtype: go.Figure
         """
 
+        # if samples is a list return 'in' elif its a scalar return '=' else nothing
         if isinstance(samples, list):
             prepared_sample_cond = "sample in ?"
         elif isinstance(samples, int):
@@ -657,7 +709,7 @@ class Parafac2Results:
             prepared_sample_cond = ""
 
         if isinstance(wavelengths, list):
-            prepared_wavelength_cond = "wavelengt_point in ?"
+            prepared_wavelength_cond = "wavelength_point in ?"
         elif isinstance(wavelengths, int):
             prepared_wavelength_cond = "wavelength_point = ?"
         elif isinstance(wavelengths, str) and (wavelengths == "all"):
@@ -682,9 +734,13 @@ class Parafac2Results:
         parameters = []
 
         if samples and wavelengths:
-            parameters = [samples, wavelengths]
-            conditions = " and ".join([prepared_sample_cond, prepared_wavelength_cond])
-            conditions = " ".join(["where ", conditions])
+            if samples == "all":
+                parameters = [wavelengths]
+                conditions = [prepared_wavelength_cond]
+            else:
+                parameters = [samples, wavelengths]
+                conditions = [prepared_sample_cond, prepared_wavelength_cond]
+            conditions = " ".join(["where ", *conditions])
         elif samples:
             parameters = [samples]
             conditions = " ".join(["where ", prepared_sample_cond])
@@ -698,7 +754,7 @@ class Parafac2Results:
 
         query = "".join([prefix, conditions, suffix])
 
-        df = self._con.execute(query, parameters=parameters).pl()
+        df = self._conn.execute(query, parameters=parameters).pl()
 
         if df.is_empty():
             raise ValueError("df is empty")
@@ -725,7 +781,7 @@ class Parafac2Results:
         :return: normalised reconstruction table unfolded along every mode.
         :rtype: pl.DataFrame
         """
-        return self._con.execute("select * from sample_recons").pl()
+        return self._conn.execute("select * from sample_recons").pl()
 
     def viz_recon_3d(self) -> go.Figure:
         """produce a 3d line plot of the full dataset, samples overlaid.
@@ -752,7 +808,7 @@ class Parafac2Results:
         """
 
         return (
-            self._con.execute("select * from sample_recons")
+            self._conn.execute("select * from sample_recons")
             .pl()
             .pivot(
                 index=["sample", "elution_point"], on="wavelength_point", values="abs"
@@ -809,7 +865,7 @@ class Parafac2Results:
         :rtype: pl.DataFrame
         """
 
-        return self._con.execute("show").pl()
+        return self._conn.execute("show").pl()
 
     def _describe_table(self, table: str) -> pl.DataFrame:
         """display the description of a given `table`
@@ -819,7 +875,7 @@ class Parafac2Results:
         :return: tabulation of the description of the table
         :rtype: pl.DataFrame
         """
-        return self._con.execute(f"describe {table}").pl()
+        return self._conn.execute(f"describe {table}").pl()
 
     def results_dashboard(self):
         """return a Dash dashboard"""
