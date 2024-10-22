@@ -8,3 +8,4 @@ class DCols(StrEnum):
     ABS = "abs"
     PATH = "path"
     ID = "id"
+    IDX = "idx"
