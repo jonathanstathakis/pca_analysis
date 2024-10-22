@@ -32,7 +32,7 @@ def apply_projections(
 
 class Parafac2Results:
     def __init__(
-        self, decomp: Parafac2Tensor, con: db.DuckDBPyConnection = db.connect()
+        self, decomp: Parafac2Tensor, conn: db.DuckDBPyConnection = db.connect()
     ) -> None:
         """
         generate a sql datamart for the decomposition results. After initialisation call
@@ -45,12 +45,46 @@ class Parafac2Results:
         :type con: db.DuckDBPyConnection, optional
         """
 
-        self._con = con
+        self._con = conn
         self._decomp = decomp
 
         self._A, self._Bs, self._C = apply_projections(self._decomp)
 
         self.n_components = self._A.shape[1]
+        self.n_samples = self._A.shape[0]
+        self.n_time_points = self._Bs[0].shape[0]
+        self.n_spectral_points = self._C.shape[0]
+
+    def __repr__(self):
+        repr_str = f"""
+        -------
+        Results
+        -------
+
+        Parafac2Tensor
+        --------------
+
+        {str(self._decomp)}
+
+
+        Factor Shapes
+        -------------
+
+        A: {self._A.shape}
+        Bs: {len(self._Bs)}, {self._Bs[0].shape}
+        C: {self._C.shape}
+
+        Summary
+        -------
+
+        num. components: {self.n_components}
+        num. samples: {self.n_samples}
+        num. time points: {self.n_time_points}
+        num. spectral points: {self.n_spectral_points}
+
+        """
+
+        return repr_str
 
     def _create_component_table(self):
         """
@@ -666,6 +700,9 @@ class Parafac2Results:
 
         df = self._con.execute(query, parameters=parameters).pl()
 
+        if df.is_empty():
+            raise ValueError("df is empty")
+
         # calculate a facet col wrap
         facet_col_wrap = df.select(facet_col).unique().count().item() // 4
 
@@ -783,9 +820,26 @@ class Parafac2Results:
         :rtype: pl.DataFrame
         """
         return self._con.execute(f"describe {table}").pl()
-    
+
     def results_dashboard(self):
         """return a Dash dashboard"""
+        from dash import Dash, html, dcc
+        import dash_bootstrap_components as dbc
+
+        app = Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
+
+        recon_3d = self.viz_recon_3d()
+        facet = self.viz_recon_input_overlay_facet(samples="all", wavelengths=10)
+        app.layout = dbc.Container(
+            dbc.Row(
+                [
+                    dbc.Col(dcc.Graph(id="3d", figure=recon_3d)),
+                    dbc.Col(dcc.Graph(id="facet", figure=facet)),
+                ]
+            )
+        )
+
+        return app
 
 
 def _proof_that_my_computations_match_tly(
