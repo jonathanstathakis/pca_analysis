@@ -1,17 +1,23 @@
 from sklearn.pipeline import Pipeline
-from pca_analysis.notebooks.experiments.parafac2_pipeline.estimators import (
+from .estimators import (
     PARAFAC2,
     BCorr_ASLS,
 )
+from enum import StrEnum
+
+
+class PipeSteps(StrEnum):
+    BCORR = "bcorr"
+    PARAFAC2 = "parafac2"
 
 
 def create_pipeline():
     """Create the sklearn pipeline"""
     return Pipeline(
         steps=[
-            ("bcorr", BCorr_ASLS()),
+            (PipeSteps.BCORR, BCorr_ASLS()),
             (
-                "parafac2",
+                PipeSteps.PARAFAC2,
                 PARAFAC2(),
             ),
         ],

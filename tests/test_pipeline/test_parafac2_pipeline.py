@@ -1,5 +1,3 @@
-import pytest
-import duckdb as db
 
 
 import logging

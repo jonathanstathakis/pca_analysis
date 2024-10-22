@@ -9,9 +9,19 @@ from typing import Self
 import logging
 from pca_analysis.notebooks.experiments.parafac2_pipeline.data import XX
 from numpy.typing import NDArray
+from enum import StrEnum
 
 pl.Config.set_tbl_width_chars(999)
 logger = logging.getLogger(__name__)
+
+
+class Parafac2Tables(StrEnum):
+    A = "A"
+    B_PURE = "B_pure"
+    C_PURE = "C_pure"
+    COMPONENTS = "components"
+    SAMPLE_COMPONENTS = "sample_components"
+    SAMPLE_RECONS = "sample_recons"
 
 
 def apply_projections(
@@ -37,6 +47,7 @@ class Pfac2Loader:
         exec_id: str,
         decomp: Parafac2Tensor,
         conn: db.DuckDBPyConnection = db.connect(),
+        results_name: str = "parafac2",
     ):
         """
         generate a sql datamart for the decomposition results. After initialisation call
@@ -51,6 +62,7 @@ class Pfac2Loader:
         self._exec_id = exec_id
         self._conn = conn
         self._decomp = decomp
+        self._result_id = results_name
 
         self._A, self._Bs, self._C = apply_projections(self._decomp)
 
@@ -90,22 +102,29 @@ class Pfac2Loader:
 
         return repr_str
 
+    def _insert_into_result_id_tbl(self):
+        """create a table storing the result ids"""
+
+        query = """--sql
+        insert into result_id
+            by name (
+                select $result_id as result_id,
+                $exec_id as exec_id)
+        """
+
+        self._conn.execute(
+            query, parameters={"result_id": self._result_id, "exec_id": self._exec_id}
+        )
+
     def create_datamart(
         self,
-        runids: list[str],
     ) -> Self:
-        """setup the base state of the data mart
-
-        :param input_imgs: the input images, each sample as a slice.
-        :type input_imgs: XX
-        TODO: define handling of the input images
-        """
+        """setup the base state of the data mart"""
 
         logger.debug("loading parafac2 results..")
 
-        self._create_exec_id_tbl()
+        self._insert_into_result_id_tbl()
         self._create_component_table()
-        self._create_sample_table(runids=runids)
         self._create_table_A()
         self._create_table_B()
         self._create_table_C()
@@ -116,18 +135,6 @@ class Pfac2Loader:
 
         return self
 
-    def _create_exec_id_tbl(self):
-        """creates a exec_id table containing the exec_ids"""
-
-        query = """--sql
-        create table if not exists exec_id (
-        exec_id varchar primary key,
-        );
-        insert or replace into exec_id values (?)
-        """
-
-        self._conn.execute(query, parameters=[self._exec_id])
-
     def _create_component_table(self):
         """
         create a 'components' table containing the 'component' primary keys only.
@@ -136,25 +143,30 @@ class Pfac2Loader:
         """
 
         logger.debug("writing component table to db..")
-        component_df = pl.DataFrame(
-            {"component": np.arange(0, self.n_components, 1)}
-        ).with_columns(pl.lit(self._exec_id).alias("exec_id"))
+        component_df = (
+            pl.DataFrame({"component": np.arange(0, self.n_components, 1)})
+            .with_columns(pl.lit(self._exec_id).alias("exec_id"))
+            .with_columns(pl.lit(self._result_id).alias("result_id"))
+        )
+
         component_df.shape
 
         self._conn.execute(
-            """--sql
-            create table if not exists components (
+            f"""--sql
+            create table if not exists {str(Parafac2Tables.COMPONENTS)} (
                 exec_id varchar references exec_id(exec_id),
+                result_id varchar references result_id(result_id),
                 component integer unique not null,
-                primary key (exec_id, component)
+                primary key (exec_id, result_id, component)
             );
             """
         )
 
-        self._conn.execute("""--sql
-            insert into components
+        self._conn.execute(f"""--sql
+            insert into {str(Parafac2Tables.COMPONENTS)}
                 select
                     exec_id,
+                    result_id,
                     component
                 from
                     component_df
@@ -168,25 +180,33 @@ class Pfac2Loader:
 
         logger.debug("writing table A..")
         A_df = (
-            pl.DataFrame(
-                self._A, schema=[str(x) for x in np.arange(0, self.n_components)]
+            (
+                pl.DataFrame(
+                    self._A, schema=[str(x) for x in np.arange(0, self.n_components)]
+                )
+                .with_row_index("sample")
+                .unpivot(
+                    index=["sample"], variable_name="component", value_name="weight"
+                )
             )
-            .with_row_index("sample")
-            .unpivot(index=["sample"], variable_name="component", value_name="weight")
-        ).with_columns(pl.lit(self._exec_id).alias("exec_id"))
+            .with_columns(pl.lit(self._exec_id).alias("exec_id"))
+            .with_columns(pl.lit(self._result_id).alias("result_id"))
+        )
         A_df.shape
 
-        query = """--sql
-        create table A (
+        query = f"""--sql
+        create table {str(Parafac2Tables.A)} (
         exec_id varchar references exec_id(exec_id),
+        result_id varchar references result_id(result_id),
         sample int references samples(sample),
         component int references components(component),
         weight float not null,
-        primary key (exec_id, sample, component)
+        primary key (exec_id, result_id, sample, component)
         );
-        insert into A
+        insert into {str(Parafac2Tables.A)}
             select
                 exec_id,
+                result_id,
                 sample,
                 component,
                 weight
@@ -195,34 +215,6 @@ class Pfac2Loader:
         """
 
         self._conn.execute(query)
-
-    def _create_sample_table(self, runids: list[str]):
-        """write a table containing the unique sample ids
-        :param runids: the labels of each sample in the dataset
-        :type runids: list[str]
-        """
-
-        logger.debug("writing sample table..")
-        sample_df = pl.DataFrame(
-            {"sample": np.arange(0, len(runids), 1), "runid": runids}
-        ).with_columns(pl.lit(self._exec_id).alias("exec_id"))
-        sample_df.shape
-
-        self._conn.execute("""--sql
-                          create table if not exists samples (
-                            exec_id varchar references exec_id(exec_id),
-                          sample int,
-                          runid varchar,
-                          primary key (sample)
-                          );
-                          insert or replace into samples
-                            select
-                                exec_id, 
-                                sample,
-                                runid
-                            from
-                                sample_df
-                          """)
 
     def _create_table_B(self):
         """
@@ -244,24 +236,27 @@ class Pfac2Loader:
                 )
                 .with_columns(pl.col("component").str.replace("column_", "").cast(int))
                 .with_columns(pl.lit(self._exec_id).alias("exec_id"))
+                .with_columns(pl.lit(self._result_id).alias("result_id"))
             )
             B_dfs.append(df)
         B_df = pl.concat(B_dfs)
 
         try:
-            query = """--sql
-            create table if not exists B_pure (
+            query = f"""--sql
+            create table if not exists {str(Parafac2Tables.B_PURE)} (
             exec_id varchar references exec_id(exec_id),
+            result_id varchar references result_id(result_id),
             sample integer not null references samples(sample),
             component int not null references components(component),
             elution_point int not null,
             value float not null,
-            primary key (exec_id, sample, component, elution_point)
+            primary key (exec_id, result_id, sample, component, elution_point)
             );
             
-            insert or replace into B_pure
+            insert or replace into {str(Parafac2Tables.B_PURE)}
                 select
                     exec_id,
+                    result_id,
                     sample,
                     component,
                     elution_point,
@@ -291,21 +286,23 @@ class Pfac2Loader:
             )
             .with_columns(pl.col("component").str.replace("column_", "").cast(int))
             .with_columns(pl.lit(self._exec_id).alias("exec_id"))
-        )
+        ).with_columns(pl.lit(self._result_id).alias("result_id"))
         C_df.shape
         # insert it into the db
 
-        self._conn.execute("""--sql
-        create table if not exists C_pure (
+        self._conn.execute(f"""--sql
+        create table if not exists {str(Parafac2Tables.C_PURE)} (
                             exec_id varchar,
+                            result_id varchar references result_id(result_id),
                           component integer not null references components(component),
                           spectral_point int not null,
                           value float not null,
-                          primary key (exec_id, component, spectral_point)
+                          primary key (exec_id, result_id, component, spectral_point)
         );
-        insert or replace into C_pure
+        insert or replace into {str(Parafac2Tables.C_PURE)}
             select
                 exec_id,
+                result_id,
                 component,
                 spectral_point,
                 value
@@ -414,25 +411,29 @@ class Pfac2Loader:
                     self._create_component_tensor_df(slice, sample_idx, component_idx)
                 )
 
-        component_df = pl.concat(flat_dfs).with_columns(
-            pl.lit(self._exec_id).alias("exec_id")
+        component_df = (
+            pl.concat(flat_dfs)
+            .with_columns(pl.lit(self._exec_id).alias("exec_id"))
+            .with_columns(pl.lit(self._result_id).alias("result_id"))
         )
         len(component_df)  # quiet pylance
 
         # load into db
-        self._conn.sql("""--sql
-        create table sample_components (
+        self._conn.sql(f"""--sql
+        create table {str(Parafac2Tables.SAMPLE_COMPONENTS)} (
             exec_id varchar references exec_id(exec_id),
+            result_id varchar references result_id(result_id),
             sample int references samples(sample),
             component int references components(component),
             wavelength_point int not null,
             elution_point int not null,
             abs float not null,
-            primary key (exec_id, sample, component, wavelength_point, elution_point)
+            primary key (exec_id, result_id, sample, component, wavelength_point, elution_point)
         );
-        insert into sample_components
+        insert into {str(Parafac2Tables.SAMPLE_COMPONENTS)}
             select 
                 exec_id,
+                result_id,
                 sample,
                 component,
                 wavelength_point,
@@ -453,36 +454,40 @@ class Pfac2Loader:
         # join all the tables together and sum. This can be done by pivoting on component
 
         self._conn.sql(
-            """--sql
-        create or replace table sample_recons (
+            f"""--sql
+        create or replace table {str(Parafac2Tables.SAMPLE_RECONS)} (
         exec_id varchar references exec_id(exec_id),
+        result_id varchar references result_id(result_id),
         sample int references samples(sample),
         wavelength_point int not null,
         elution_point int not null,
         abs float not null,
-        primary key (exec_id, sample, wavelength_point, elution_point)
+        primary key (exec_id, result_id, sample, wavelength_point, elution_point)
         );
         with
             piv as (
             pivot
-                sample_components
+                {str(Parafac2Tables.SAMPLE_COMPONENTS)}
             on
                 component
             using
                 first(abs)
             order by
+                exec_id,
+                result_id,
                 sample,
                 wavelength_point,
                 elution_point
             )
-            insert into sample_recons
+            insert into {str(Parafac2Tables.SAMPLE_RECONS)}
                 select
                     exec_id,
+                    result_id,
                     sample,
                     wavelength_point,
                     elution_point,
                     -- horizontal sum
-                    list_sum(list_value(*columns(* exclude(exec_id, sample, wavelength_point, elution_point)))) as abs 
+                    list_sum(list_value(*columns(* exclude(exec_id, result_id, sample, wavelength_point, elution_point)))) as abs 
                 from
                     piv
         """
@@ -879,7 +884,7 @@ class Parafac2Results:
 
     def results_dashboard(self):
         """return a Dash dashboard"""
-        from dash import Dash, html, dcc
+        from dash import Dash, dcc
         import dash_bootstrap_components as dbc
 
         app = Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])

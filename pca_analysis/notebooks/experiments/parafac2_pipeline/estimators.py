@@ -1,13 +1,18 @@
-from sklearn.base import BaseEstimator, TransformerMixin
-from tensorly.decomposition import parafac2 as tl_parafac2
-from pybaselines import Baseline
+import logging
+from enum import StrEnum
+
+import duckdb as db
 import numpy as np
 import plotly.express as px
-from plotly.subplots import make_subplots
 import plotly.graph_objects as go
-import numpy as np
-import duckdb as db
-from numpy.typing import ArrayLike
+import polars as pl
+from numpy.typing import NDArray
+from plotly.subplots import make_subplots
+from pybaselines import Baseline
+from sklearn.base import BaseEstimator, TransformerMixin
+from tensorly.decomposition import parafac2 as tl_parafac2
+
+logger = logging.getLogger(__name__)
 
 
 class PARAFAC2(TransformerMixin, BaseEstimator):
@@ -234,7 +239,6 @@ class BCorr_ASLS(TransformerMixin, BaseEstimator):
         # X = self._validate_data(X, accept_sparse=True, reset=False)
 
         # compute the baseliens
-        self._input = X
         self.slice_wavelength_params = []
         X_blines = []
         for slice in X:
@@ -256,12 +260,12 @@ class BCorr_ASLS(TransformerMixin, BaseEstimator):
             self.slice_wavelength_params.append(wavelength_params)
             X_blines.append(wavelength_blines)
 
-        self._X_bline_slices = [np.stack(X_bline).T for X_bline in X_blines]
+        self.bline_slices_ = [np.stack(X_bline).T for X_bline in X_blines]
 
         # compute the correctd signals
         self.Xt = []
         for idx, slice in enumerate(X):
-            self.Xt.append(slice - self._X_bline_slices[idx])
+            self.Xt.append(slice - self.bline_slices_[idx])
 
         return self.Xt
 
@@ -271,14 +275,6 @@ class BCorr_ASLS(TransformerMixin, BaseEstimator):
         # Here, our transformer does not do any operation in `fit` and only validate
         # the parameters. Thus, it is stateless.
         return {"stateless": True}
-
-    def get_bcorr_results(self, conn=db.connect()):
-        return BCorrResults(
-            conn=conn,
-            input=self._input,
-            corrected=self.Xt,
-            baselines=self._X_bline_slices,
-        )
 
 
 class BCorr_SNIP(TransformerMixin, BaseEstimator):
@@ -390,19 +386,6 @@ class BCorr_SNIP(TransformerMixin, BaseEstimator):
         # the parameters. Thus, it is stateless.
         return {"stateless": True}
 
-    def get_bcorr_results(self, conn=db.connect()):
-        return BCorrResults(
-            conn=conn,
-            input=self._input,
-            corrected=self.Xt,
-            baselines=self._X_bline_slices,
-        )
-
-
-import duckdb as db
-from enum import StrEnum
-import polars as pl
-
 
 class BCRCols(StrEnum):
     """BaselineCorrectionResultsColumns"""
@@ -420,7 +403,7 @@ class SignalNames(StrEnum):
     INPUT = "input"
 
 
-def to_dataframe(arrs: list, signal_name=None):
+def to_dataframe(arrs: list[NDArray], signal_name=None):
     df = (
         pl.concat(
             [
@@ -443,37 +426,69 @@ def to_dataframe(arrs: list, signal_name=None):
     return df
 
 
-class BCorrResults:
-    def __init__(self, input, corrected, baselines, conn=db.connect()):
+class BCorrLoader:
+    def __init__(
+        self,
+        exec_id: str,
+        corrected: list[NDArray],
+        baselines: list[NDArray],
+        conn=db.connect(),
+        result_id: str = "bcorr",
+    ):
         self._conn = conn
-        self.input = input
         self.corrected = corrected
         self.baselines = baselines
+        self._exec_id = exec_id
+        self._result_id = result_id
 
-        corr = to_dataframe(self.corrected, signal_name=SignalNames.CORR)
-        baselines = to_dataframe(self.baselines, signal_name=SignalNames.BLINE)
-        input = to_dataframe(self.input, signal_name=SignalNames.INPUT)
-        self.df = pl.concat([corr, baselines, input]).sort(
-            BCRCols.SAMPLE, BCRCols.SIGNAL, BCRCols.WAVELENGTH, BCRCols.IDX
+        corr_df = to_dataframe(self.corrected, signal_name=SignalNames.CORR)
+
+        bline_df = to_dataframe(self.baselines, signal_name=SignalNames.BLINE)
+
+        self.df = (
+            pl.concat([corr_df, bline_df])
+            .sort(BCRCols.SAMPLE, BCRCols.SIGNAL, BCRCols.WAVELENGTH, BCRCols.IDX)
+            .with_columns(
+                pl.lit(self._exec_id).alias("exec_id"),
+                pl.lit(self._result_id).alias("result_id"),
+            )
         )
 
-    def _to_db(self):
+    def _insert_into_result_id(self):
+        """add the result_id into the result_id table"""
+
+        query = """--sql
+        insert into result_id
+            values (?, ?)
+        """
+        logger.debug(f"inserting {self._result_id} into resuld_id table..")
+        self._conn.execute(query, parameters=[self._exec_id, self._result_id])
+
+    def load_results(self):
         """write the baselines and corrected to a database"""
+
+        logger.debug("loading bcorr results..")
+        self._insert_into_result_id()
+
 
         query = """--sql
         create table baseline_corrected (
+        exec_id varchar not null references exec_id(exec_id),
+        result_id varchar not null references result_id(result_id),
         sample int not null,
         signal varchar not null,
         wavelength int not null,
         idx int not null,
         abs float not null,
-        primary key (sample, signal, wavelength, idx)
+        primary key (exec_id, result_id, sample, signal, wavelength, idx)
         );
 
-        create unique index baseline_corrected_idx on baseline_corrected(sample, signal, wavelength, idx);
+        create unique index baseline_corrected_idx on baseline_corrected(exec_id, result_id, sample, signal, wavelength, idx);
 
         insert into baseline_corrected
             select
+                exec_id,
+                result_id,
                 sample,
                 signal,
                 wavelength,
@@ -484,6 +499,8 @@ class BCorrResults:
         """
         self._conn.execute(query)
 
+
+class BCorrResults:
     def viz_3d_line_plots_by_sample(self, cols=2, title=None) -> go.Figure:
         """
         TODO: fix plot so no *underlying* lines, add input(?)
@@ -531,7 +548,6 @@ class BCorrResults:
 
         # camera <https://plot.ly/python/3d-camera-controls/>
         # camera in subplots <https://community.plotly.com/t/make-subplots-with-3d-surfaces-how-to-set-camera-scene/15137/4>
-        eye_mult = 1.4
         default_camera = dict(
             up=dict(x=0, y=0, z=1),
             center=dict(x=0, y=0, z=0),

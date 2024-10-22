@@ -1,17 +1,16 @@
 import duckdb as db
 from pathlib import Path
-from pca_analysis.notebooks.experiments.parafac2_pipeline.parafac2results import (
-    Parafac2Results,
-)
-from pca_analysis.notebooks.experiments.parafac2_pipeline.data import Data
-from pca_analysis.notebooks.experiments.parafac2_pipeline.pipeline import (
+from .data import Data
+from .pipeline import (
     create_pipeline,
 )
-from pca_analysis.notebooks.experiments.parafac2_pipeline.pipeline_defs import DCols
-from pca_analysis.notebooks.experiments.parafac2_pipeline.input_data import InputData
+from .pipeline_defs import DCols
+from .input_data import InputData
 import logging
-from copy import copy
+from copy import deepcopy
 from typing import Self
+from sklearn.pipeline import Pipeline
+from .results_loader import ResultsLoader
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +49,9 @@ class Orchestrator:
         self._exec_id = exec_id
         self.input_data = Data(**get_data_col_input())  # ignore
         self._logfile = Path(__file__).parent / "pipeline_log"
-
+        self._pipeline: Pipeline
         self.results = None
+        self._con_output: db.DuckDBPyConnection
 
     def __repr__(self):
         repr_str = f"""
@@ -89,29 +89,27 @@ class Orchestrator:
         """
         logger.info("loading data..")
         self._con_input = con
-        input_data = InputData(con=self._con_input, ids=runids)
+        raw_input_data = InputData(conn=self._con_input, ids=runids)
 
-        self.input_data = self.input_data.load_data(input_data).filter_nm_tbl(
-            expr=filter_expr
-        )
+        self.input_data = self.input_data.load_data(raw_input_data)
+
+        self.input_data = self.input_data.filter_nm_tbl(expr=filter_expr)
+
+        self._runids = self.input_data._scalar_tbl["runid"].to_list()
 
     def get_pipeline(self) -> Self:
-        _orc = copy(self)
+        _orc = self._copy_orc()
         _orc._pipeline = create_pipeline()
-
         return _orc
 
     def set_params(self, params: dict) -> Self:
-        _orc = copy(self)
-
+        _orc = self._copy_orc()
         _orc._pipeline.set_params(**params)
         return _orc
 
     def run_pipeline(
         self,
         filter_expr=None,
-        create_datamart: bool = True,
-        output_con: db.DuckDBPyConnection = db.connect(),
     ) -> Self:
         """
         run the pipeline from end to end
@@ -133,9 +131,7 @@ class Orchestrator:
         """
         logger.info("running pipeline..")
 
-        _orc = copy(self)
-
-        _orc._con_output = output_con
+        _orc = self._copy_orc()
 
         if filter_expr:
             _orc.input_data = _orc.input_data.filter_nm_tbl(filter_expr)
@@ -146,17 +142,36 @@ class Orchestrator:
         import contextlib
 
         with open(_orc._logfile, "w") as h, contextlib.redirect_stdout(h):
-            _orc._decomp = _orc._pipeline.fit_transform(X)
-
-        _orc.results = Parafac2Results(
-            conn=_orc._con_output, decomp=_orc._decomp, exec_id=self._exec_id
-        )
+            _orc._pipeline.fit_transform(X.data)
 
         # display last two lines of the fit report (PARAFAC2)
         with open(_orc._logfile, "r") as f:
             logger.info("\n".join(f.readlines()[-2:]))
 
-        if create_datamart:
-            _orc.results.create_datamart(X)
+        return _orc
+
+    def load_results(
+        self,
+        output_con: db.DuckDBPyConnection = db.connect(),
+        exec_id: str = "no id set",
+    ):
+        """run pipeline and load"""
+
+        pipeline = self._pipeline
+
+        loader = ResultsLoader(conn=output_con, exec_id=exec_id, runids=self._runids)
+
+        loader.load_results(pipeline=pipeline, steps="all")
+
+        return loader
+
+    def _copy_orc(self) -> Self:
+        """need to manually delete and reinitialise duckdb conn objects as they cant be pickled"""
+
+        conn = self._con_input
+        del self._con_input
+        _orc = deepcopy(self)
+        _orc._con_input = conn
+        self._con_input = conn
 
         return _orc
