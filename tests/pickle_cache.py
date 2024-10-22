@@ -109,8 +109,9 @@ class PickleCache:
         """load `pickle_name`"""
 
         if key in self.cached:
-            with open(self._get_pickle_path(key), "rb") as f:
-                obj = pickle.load(f)
+            pickle_path = self._get_pickle_path(key)
+            pickle_loader = PickleLoader(pickle_path=Path(pickle_path))
+            obj = pickle_loader.load_pickle()
         else:
             obj = None
 
@@ -163,3 +164,17 @@ class PickleCache:
         """
 
         return repr_str
+
+
+class PickleLoader:
+    def __init__(self, pickle_path: Path):
+        """loads pickle files"""
+
+        self._pickle_path = pickle_path
+
+    def load_pickle(self):
+        """initialize obj from `_pickle_path"""
+        with open(self._pickle_path, "rb") as f:
+            obj = pickle.load(f)
+
+            return obj
