@@ -1,6 +1,4 @@
 import duckdb as db
-import polars as pl
-import altair as alt
 from database_etl import etl_pipeline_raw
 from pathlib import Path
 from .runset import RunSet
