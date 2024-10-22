@@ -5,14 +5,16 @@ import polars as pl
 
 
 class InputData(UserList):
-    def __init__(self, con: db.DuckDBPyConnection, ids: list[str]):
+    def __init__(self, conn: db.DuckDBPyConnection, ids: list[str]):
         """a wrapper around the list data container for validation. Essentially wraps
         database_etl's `get_data`
 
         TODO: add validation
         """
 
-        self.data = get_data(output="tuple", con=con, runids=ids)
+        self.data = get_data(output="tuple", con=conn, runids=ids)
+
+        assert True
 
     def to_long_tables(self) -> tuple[pl.DataFrame, pl.DataFrame]:
         """

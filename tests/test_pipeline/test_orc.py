@@ -2,19 +2,13 @@ import pytest
 from pca_analysis.notebooks.experiments.parafac2_pipeline.orchestrator import (
     Orchestrator,
 )
-from pca_analysis.notebooks.experiments.parafac2_pipeline.parafac2results import (
-    Parafac2Results,
-)
 import duckdb as db
 
 from pca_analysis.notebooks.experiments.parafac2_pipeline.results_loader import (
     ResultsLoader,
 )
-
-from pca_analysis.notebooks.experiments.parafac2_pipeline.results_loader import (
-    ResultsLoader,
-    baseline_corr_extractor,
-    parafac2_results_estractor,
+from pca_analysis.notebooks.experiments.parafac2_pipeline.parafac2results import (
+    Parafac2Tables,
 )
 
 
@@ -47,7 +41,7 @@ def orc_run_pipeline(
     """
     execute the pipeline in full.
     """
-    return orc_get_pipeline_set_params.run_pipeline(output_con=pipeline_output_con)
+    return orc_get_pipeline_set_params.run_pipeline()
 
 
 @pytest.mark.skip
@@ -67,19 +61,17 @@ def test_display_orc_results(orc_run_pipeline: Orchestrator):
 
 
 @pytest.fixture(scope="module")
-def results_loader(testcon, exec_id="test"):
-    results_loader = ResultsLoader(conn=testcon, exec_id=exec_id)
-
-    results_loader.load_extractors(
-        {"bcorr": baseline_corr_extractor, "parafac2": parafac2_results_estractor}
+def results_loader(test_sample_ids: list[str], exec_id="test"):
+    results_loader = ResultsLoader(
+        conn=db.connect(), exec_id=exec_id, runids=test_sample_ids
     )
+
     return results_loader
 
 
 def test_results_loader(
     orc_run_pipeline: Orchestrator,
     results_loader: ResultsLoader,
-    exec_id="test",
     overwrite: bool = True,
 ):
     """test whether the result loader works.."""
@@ -87,10 +79,32 @@ def test_results_loader(
     results_loader.load_results(
         pipeline=orc_run_pipeline._pipeline,
         steps=["bcorr", "parafac2"],
-        exec_id=exec_id,
         overwrite=overwrite,
     )
 
 
 def test_orc_run_pipeline(orc_run_pipeline):
     assert orc_run_pipeline
+
+
+@pytest.fixture(scope="module")
+def results_conn():
+    return db.connect()
+
+
+def test_load_results(
+    orc_run_pipeline: Orchestrator,
+    results_conn: db.DuckDBPyConnection,
+):
+    loader = orc_run_pipeline.load_results(
+        output_con=results_conn, exec_id="test_load_results"
+    )
+
+    assert loader
+
+    # test that the expected tables are in the database
+
+    table_names = results_conn.execute("select name from (show)").fetchnumpy()["name"]
+
+    for table in list(Parafac2Tables):
+        assert table in table_names
