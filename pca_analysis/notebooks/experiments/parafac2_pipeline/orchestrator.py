@@ -10,7 +10,7 @@ import logging
 from copy import deepcopy
 from typing import Self
 from sklearn.pipeline import Pipeline
-from .results_loader import ResultsLoader
+from .results_db import ResultsDB
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,9 @@ class Orchestrator:
         self._logfile = Path(__file__).parent / "pipeline_log"
         self._pipeline: Pipeline
         self.results = None
+        self._con_input: db.DuckDBPyConnection
         self._con_output: db.DuckDBPyConnection
+        self._runids: list[str]
 
     def __repr__(self):
         repr_str = f"""
@@ -73,7 +75,7 @@ class Orchestrator:
         return repr_str
 
     def load_data(
-        self, con: db.DuckDBPyConnection, runids: list[str], filter_expr=None
+        self, conn: db.DuckDBPyConnection, runids: list[str], filter_expr=None
     ):
         """
         Load the specified samples from the database with a optional filter expression.
@@ -88,14 +90,18 @@ class Orchestrator:
         :type runids: list[str]
         """
         logger.info("loading data..")
-        self._con_input = con
-        raw_input_data = InputData(conn=self._con_input, ids=runids)
 
-        self.input_data = self.input_data.load_data(raw_input_data)
+        orc_ = deepcopy(self)
+        orc_._con_input = conn
+        raw_input_data = InputData(conn=orc_._con_input, ids=runids)
 
-        self.input_data = self.input_data.filter_nm_tbl(expr=filter_expr)
+        orc_.input_data = orc_.input_data.load_data(raw_input_data)
 
-        self._runids = self.input_data._scalar_tbl["runid"].to_list()
+        orc_.input_data = orc_.input_data.filter_nm_tbl(expr=filter_expr)
+
+        orc_._runids = orc_.input_data._scalar_tbl["runid"].to_list()
+
+        return orc_
 
     def get_pipeline(self) -> Self:
         _orc = self._copy_orc()
@@ -153,17 +159,20 @@ class Orchestrator:
     def load_results(
         self,
         output_con: db.DuckDBPyConnection = db.connect(),
-        exec_id: str = "no id set",
-    ):
-        """run pipeline and load"""
+    ) -> ResultsDB:
+        """load pipeline results into a database, returning a ResultsDB object that provides methods of viewing the results"""
 
         pipeline = self._pipeline
 
-        loader = ResultsLoader(conn=output_con, exec_id=exec_id, runids=self._runids)
+        results_db = ResultsDB(
+            conn=output_con,
+        )
 
-        loader.load_results(pipeline=pipeline, steps="all")
+        results_db.load_results(
+            self._exec_id, self._runids, steps="all", pipeline=pipeline
+        )
 
-        return loader
+        return results_db
 
     def _copy_orc(self) -> Self:
         """need to manually delete and reinitialise duckdb conn objects as they cant be pickled"""

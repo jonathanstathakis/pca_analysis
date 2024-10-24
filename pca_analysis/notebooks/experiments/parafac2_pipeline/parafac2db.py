@@ -1,15 +1,18 @@
-import duckdb as db
-import polars as pl
-import numpy as np
-from tensorly.parafac2_tensor import apply_parafac2_projections, Parafac2Tensor
-import plotly.graph_objects as go
-import plotly.express as px
-from pca_analysis.notebooks.experiments.parafac2_pipeline.utility import plot_imgs
-from typing import Self
 import logging
-from pca_analysis.notebooks.experiments.parafac2_pipeline.data import XX
-from numpy.typing import NDArray
 from enum import StrEnum
+from typing import Self
+
+import duckdb as db
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+import polars as pl
+from numpy.typing import NDArray
+from tensorly.parafac2_tensor import Parafac2Tensor, apply_parafac2_projections
+
+from .data import XX
+from .core_tables import CoreTbls
+from .utility import plot_imgs
 
 pl.Config.set_tbl_width_chars(999)
 logger = logging.getLogger(__name__)
@@ -24,29 +27,12 @@ class Parafac2Tables(StrEnum):
     SAMPLE_RECONS = "sample_recons"
 
 
-def apply_projections(
-    parafac2tensor: Parafac2Tensor,
-) -> tuple[NDArray, list[NDArray], NDArray]:
-    """
-    apply the tensorly `apply_parafac2_projections` to scale the Bs
-
-    :param parafac2tensor: result of PARAFAC2 decomposition
-    :type parafac2tensor: Parafac2Tensor
-    :return: A, B slices and C
-    :rtype: tuple[NDArray, list[NDArray], NDArray]
-    """
-    weights, (A, B, C), projections = parafac2tensor
-    _, (_, Bs, _) = apply_parafac2_projections((weights, (A, B, C), projections))
-
-    return A, Bs, C
-
-
 class Pfac2Loader:
     def __init__(
         self,
         exec_id: str,
         decomp: Parafac2Tensor,
-        conn: db.DuckDBPyConnection = db.connect(),
+        output_conn: db.DuckDBPyConnection,
         results_name: str = "parafac2",
     ):
         """
@@ -60,7 +46,7 @@ class Pfac2Loader:
         :type con: db.DuckDBPyConnection, optional
         """
         self._exec_id = exec_id
-        self._conn = conn
+        self._conn = output_conn
         self._decomp = decomp
         self._result_id = results_name
 
@@ -154,8 +140,8 @@ class Pfac2Loader:
         self._conn.execute(
             f"""--sql
             create table if not exists {str(Parafac2Tables.COMPONENTS)} (
-                exec_id varchar references exec_id(exec_id),
-                result_id varchar references result_id(result_id),
+                exec_id varchar references {CoreTbls.EXEC_ID}(exec_id),
+                result_id varchar references {CoreTbls.RESULT_ID}(result_id),
                 component integer unique not null,
                 primary key (exec_id, result_id, component)
             );
@@ -196,10 +182,10 @@ class Pfac2Loader:
 
         query = f"""--sql
         create table {str(Parafac2Tables.A)} (
-        exec_id varchar references exec_id(exec_id),
-        result_id varchar references result_id(result_id),
-        sample int references samples(sample),
-        component int references components(component),
+        exec_id varchar references {CoreTbls.EXEC_ID}(exec_id),
+        result_id varchar references {CoreTbls.RESULT_ID}(result_id),
+        sample int references {CoreTbls.SAMPLES}(sample),
+        component int references {Parafac2Tables.COMPONENTS}(component),
         weight float not null,
         primary key (exec_id, result_id, sample, component)
         );
@@ -244,10 +230,10 @@ class Pfac2Loader:
         try:
             query = f"""--sql
             create table if not exists {str(Parafac2Tables.B_PURE)} (
-            exec_id varchar references exec_id(exec_id),
-            result_id varchar references result_id(result_id),
-            sample integer not null references samples(sample),
-            component int not null references components(component),
+            exec_id varchar references {CoreTbls.EXEC_ID}(exec_id),
+            result_id varchar references {CoreTbls.RESULT_ID}(result_id),
+            sample integer not null references {CoreTbls.SAMPLES}(sample),
+            component int not null references {Parafac2Tables.COMPONENTS}(component),
             elution_point int not null,
             value float not null,
             primary key (exec_id, result_id, sample, component, elution_point)
@@ -292,9 +278,9 @@ class Pfac2Loader:
 
         self._conn.execute(f"""--sql
         create table if not exists {str(Parafac2Tables.C_PURE)} (
-                            exec_id varchar,
-                            result_id varchar references result_id(result_id),
-                          component integer not null references components(component),
+                            exec_id varchar references {CoreTbls.EXEC_ID}(exec_id),
+                            result_id varchar references {CoreTbls.RESULT_ID}(result_id),
+                          component integer not null references {Parafac2Tables.COMPONENTS}(component),
                           spectral_point int not null,
                           value float not null,
                           primary key (exec_id, result_id, component, spectral_point)
@@ -421,10 +407,10 @@ class Pfac2Loader:
         # load into db
         self._conn.sql(f"""--sql
         create table {str(Parafac2Tables.SAMPLE_COMPONENTS)} (
-            exec_id varchar references exec_id(exec_id),
-            result_id varchar references result_id(result_id),
-            sample int references samples(sample),
-            component int references components(component),
+            exec_id varchar references {CoreTbls.EXEC_ID}(exec_id),
+            result_id varchar references {CoreTbls.RESULT_ID}(result_id),
+            sample int references {CoreTbls.SAMPLES}(sample),
+            component int references {Parafac2Tables.COMPONENTS}(component),
             wavelength_point int not null,
             elution_point int not null,
             abs float not null,
@@ -456,9 +442,9 @@ class Pfac2Loader:
         self._conn.sql(
             f"""--sql
         create or replace table {str(Parafac2Tables.SAMPLE_RECONS)} (
-        exec_id varchar references exec_id(exec_id),
-        result_id varchar references result_id(result_id),
-        sample int references samples(sample),
+        exec_id varchar references {CoreTbls.EXEC_ID}(exec_id),
+        result_id varchar references {CoreTbls.RESULT_ID}(result_id),
+        sample int references {CoreTbls.SAMPLES}(sample),
         wavelength_point int not null,
         elution_point int not null,
         abs float not null,
@@ -884,8 +870,8 @@ class Parafac2Results:
 
     def results_dashboard(self):
         """return a Dash dashboard"""
-        from dash import Dash, dcc
         import dash_bootstrap_components as dbc
+        from dash import Dash, dcc
 
         app = Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
 
@@ -901,6 +887,23 @@ class Parafac2Results:
         )
 
         return app
+
+
+def apply_projections(
+    parafac2tensor: Parafac2Tensor,
+) -> tuple[NDArray, list[NDArray], NDArray]:
+    """
+    apply the tensorly `apply_parafac2_projections` to scale the Bs
+
+    :param parafac2tensor: result of PARAFAC2 decomposition
+    :type parafac2tensor: Parafac2Tensor
+    :return: A, B slices and C
+    :rtype: tuple[NDArray, list[NDArray], NDArray]
+    """
+    weights, (A, B, C), projections = parafac2tensor
+    _, (_, Bs, _) = apply_parafac2_projections((weights, (A, B, C), projections))
+
+    return A, Bs, C
 
 
 def _proof_that_my_computations_match_tly(
@@ -934,3 +937,47 @@ def _proof_that_my_computations_match_tly(
         return True
     else:
         return False
+
+
+class Pfac2Extractor:
+    def __init__(self):
+        """extract parafac2 results from db"""
+
+
+class PARAFAC2DB:
+    def __init__(self, output_conn: db.DuckDBPyConnection):
+        """handler of the database IO for the PARAFAC2 results"""
+
+        self.loader: Pfac2Loader
+        self.extractor: Pfac2Extractor
+
+        self._conn = output_conn
+
+        ...
+
+    def get_loader(
+        self,
+        exec_id: str,
+        decomp: Parafac2Tensor,
+        results_name: str = "parafac2",
+    ) -> Pfac2Loader:
+        return Pfac2Loader(
+            exec_id=exec_id,
+            decomp=decomp,
+            output_conn=self._conn,
+            results_name=results_name,
+        )
+
+    def get_extractor(
+        self,
+        exec_id: str,
+        results_con: db.DuckDBPyConnection,
+        results_name: str = "parafac2",
+    ) -> Pfac2Extractor:
+        return Pfac2Extractor()
+
+    def clear_tables(self):
+        """clear all parafac2 related tables"""
+
+        for tbl in Parafac2Tables:
+            self._conn.execute(f"truncate {tbl}")

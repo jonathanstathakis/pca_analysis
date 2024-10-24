@@ -1,13 +1,10 @@
 import logging
 from enum import StrEnum
 
-import duckdb as db
 import numpy as np
-import plotly.express as px
 import plotly.graph_objects as go
 import polars as pl
 from numpy.typing import NDArray
-from plotly.subplots import make_subplots
 from pybaselines import Baseline
 from sklearn.base import BaseEstimator, TransformerMixin
 from tensorly.decomposition import parafac2 as tl_parafac2
@@ -109,7 +106,7 @@ class PARAFAC2(TransformerMixin, BaseEstimator):
         # `feature_names_in_` but only check that the shape is consistent.
         # X = self._validate_data(X, accept_sparse=True, reset=False)
 
-        self.decomp, self.errors = tl_parafac2(
+        self.decomp_, self.errors = tl_parafac2(
             tensor_slices=X,
             rank=self.rank,
             n_iter_max=self.n_iter_max,
@@ -126,7 +123,7 @@ class PARAFAC2(TransformerMixin, BaseEstimator):
             linesearch=self.linesearch,
         )
 
-        return self.decomp
+        return self.decomp_
 
     def _more_tags(self):
         # This is a quick example to show the tags API:\
@@ -424,188 +421,3 @@ def to_dataframe(arrs: list[NDArray], signal_name=None):
     if signal_name:
         df = df.with_columns(pl.lit(signal_name).alias(BCRCols.SIGNAL))
     return df
-
-
-class BCorrLoader:
-    def __init__(
-        self,
-        exec_id: str,
-        corrected: list[NDArray],
-        baselines: list[NDArray],
-        conn=db.connect(),
-        result_id: str = "bcorr",
-    ):
-        self._conn = conn
-        self.corrected = corrected
-        self.baselines = baselines
-        self._exec_id = exec_id
-        self._result_id = result_id
-
-        corr_df = to_dataframe(self.corrected, signal_name=SignalNames.CORR)
-
-        bline_df = to_dataframe(self.baselines, signal_name=SignalNames.BLINE)
-
-        self.df = (
-            pl.concat([corr_df, bline_df])
-            .sort(BCRCols.SAMPLE, BCRCols.SIGNAL, BCRCols.WAVELENGTH, BCRCols.IDX)
-            .with_columns(
-                pl.lit(self._exec_id).alias("exec_id"),
-                pl.lit(self._result_id).alias("result_id"),
-            )
-        )
-
-    def _insert_into_result_id(self):
-        """add the result_id into the result_id table"""
-
-        query = """--sql
-        insert into result_id
-            values (?, ?)
-        """
-        logger.debug(f"inserting {self._result_id} into resuld_id table..")
-        self._conn.execute(query, parameters=[self._exec_id, self._result_id])
-
-    def load_results(self):
-        """write the baselines and corrected to a database"""
-
-        logger.debug("loading bcorr results..")
-        self._insert_into_result_id()
-
-
-        query = """--sql
-        create table baseline_corrected (
-        exec_id varchar not null references exec_id(exec_id),
-        result_id varchar not null references result_id(result_id),
-        sample int not null,
-        signal varchar not null,
-        wavelength int not null,
-        idx int not null,
-        abs float not null,
-        primary key (exec_id, result_id, sample, signal, wavelength, idx)
-        );
-
-        create unique index baseline_corrected_idx on baseline_corrected(exec_id, result_id, sample, signal, wavelength, idx);
-
-        insert into baseline_corrected
-            select
-                exec_id,
-                result_id,
-                sample,
-                signal,
-                wavelength,
-                idx,
-                abs
-            from
-                df;
-        """
-        self._conn.execute(query)
-
-
-class BCorrResults:
-    def viz_3d_line_plots_by_sample(self, cols=2, title=None) -> go.Figure:
-        """
-        TODO: fix plot so no *underlying* lines, add input(?)
-        """
-        sample_slices = self.df.partition_by(
-            BCRCols.SAMPLE, include_key=False, as_dict=True
-        )
-        num_samples = len(sample_slices)
-
-        rows = num_samples // cols
-
-        flat_specs = [{"type": "scatter3d"}] * rows * cols
-
-        reshaped_specs = np.asarray(flat_specs).reshape(-1, cols)
-        reshaped_specs_list = [list(x) for x in reshaped_specs]
-
-        titles = [f"{BCRCols.SAMPLE} = {str(x[0])}" for x in sample_slices.keys()]
-
-        # see <https://plotly.com/python/subplots/>,
-        # API: <https://plotly.com/python-api-reference/generated/plotly.subplots.make_subplots.html>
-        fig = make_subplots(
-            rows=rows,
-            cols=cols,
-            specs=reshaped_specs_list,
-            horizontal_spacing=0.0001,
-            vertical_spacing=0.05,
-            subplot_titles=titles,
-        )
-
-        coords = gen_row_col_coords(rows, cols)
-
-        for idx, sample in enumerate(sample_slices.values()):
-            # margin = dict(b=1, t=1, l=1, r=1)
-            traces = px.line_3d(
-                data_frame=sample,
-                x=BCRCols.IDX,
-                y=BCRCols.WAVELENGTH,
-                z=BCRCols.ABS,
-                line_group=BCRCols.WAVELENGTH,
-            ).data
-
-            # got to write each wavelength individually to each subplot
-            for trace in traces:
-                fig.add_trace(trace, row=coords[idx][0], col=coords[idx][1])
-
-        # camera <https://plot.ly/python/3d-camera-controls/>
-        # camera in subplots <https://community.plotly.com/t/make-subplots-with-3d-surfaces-how-to-set-camera-scene/15137/4>
-        default_camera = dict(
-            up=dict(x=0, y=0, z=1),
-            center=dict(x=0, y=0, z=0),
-            # eye=dict(x=1.25 * eye_mult, y=1.25 * eye_mult, z=1.25 * eye_mult),
-        )
-
-        fig.update_layout(
-            height=500 * rows,
-            template="plotly_dark",
-            #   margin=margin
-            title=title,
-        )
-
-        fig.update_scenes(camera=default_camera)
-
-        return fig
-
-    def viz_compare_signals(self, wavelength: int) -> go.Figure:
-        """return a 2d plot at a given wavelength for each sample, corrected, baseline
-        and original"""
-
-        wavelength_vals = self.df.get_column(BCRCols.WAVELENGTH).unique(
-            maintain_order=True
-        )
-
-        if wavelength not in wavelength_vals:
-            raise ValueError(f"{wavelength} not in {wavelength_vals}")
-
-        filtered_df = self.df.filter(pl.col(BCRCols.WAVELENGTH) == wavelength)
-
-        fig = px.line(
-            data_frame=filtered_df,
-            x=BCRCols.IDX,
-            y=BCRCols.ABS,
-            color=BCRCols.SIGNAL,
-            facet_col=BCRCols.SAMPLE,
-            facet_col_wrap=wavelength_vals.len() // 4,
-            title=f"corrected and fitted baseline @ wavelength = {wavelength}",
-        )
-
-        return fig
-
-
-def gen_row_col_coords(rows: int, cols: int) -> list[tuple[int, int]]:
-    """generate a list of tuples where every list element is the row, containing the row and column position."""
-    indexes = []
-    for row in range(1, rows + 1):
-        for col in range(1, cols + 1):
-            indexes.append((row, col))
-
-    return indexes
-
-
-def prepare_scatter_3d_from_df(df, x_col, y_col, z_col):
-    # scatter3d API: https://plotly.com/python/reference/scatter3d/#scatter3d-line
-
-    x = df.select(x_col).to_numpy().flatten()
-    y = df.select(y_col).to_numpy().flatten()
-    z = df.select(z_col).to_numpy().flatten()
-
-    return go.Scatter3d(x=x, y=y, z=z, mode="lines")
