@@ -3,7 +3,9 @@ import duckdb as db
 from tests.test_definitions import TEST_DB_PATH
 import polars as pl
 from pca_analysis.notebooks.experiments.parafac2_pipeline.data import Data, XX
-from pca_analysis.notebooks.experiments.parafac2_pipeline.input_data import InputData
+from pca_analysis.notebooks.experiments.parafac2_pipeline.input_data import (
+    InputDataGetter,
+)
 from pca_analysis.notebooks.experiments.parafac2_pipeline.orchestrator import (
     DCols,
     Orchestrator,
@@ -11,12 +13,18 @@ from pca_analysis.notebooks.experiments.parafac2_pipeline.orchestrator import (
 from pathlib import Path
 from pca_analysis.notebooks.experiments.parafac2_pipeline.estimators import PARAFAC2
 
-from pca_analysis.notebooks.experiments.parafac2_pipeline.parafac2results import (
+from pca_analysis.notebooks.experiments.parafac2_pipeline.parafac2db import (
     Parafac2Results,
 )
+from pca_analysis.notebooks.experiments.parafac2_pipeline.parafac2db import (
+    Parafac2Tables,
+)
+from pathlib import Path
+
+from pca_analysis.notebooks.experiments.parafac2_pipeline.results_db import ResultsDB
 
 import logging
-
+from sqlalchemy import Engine, create_engine
 from tensorly.parafac2_tensor import Parafac2Tensor
 from ..pickle_cache import PickleCache
 from . import CACHE_PATH
@@ -25,29 +33,16 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope="module")
-def datacon():
-    return db.connect(TEST_DB_PATH, read_only=True)
-
-
-@pytest.fixture(scope="module")
-def test_sample_ids(datacon):
-    """get test sample ids"""
-    ids = [x[0] for x in datacon.execute("select runid from inc_chm").fetchall()]
-
-    return ids
-
-
-@pytest.fixture(scope="module")
 def input_data(
     datacon,
     test_sample_ids,
-) -> InputData:
+) -> InputDataGetter:
     """the test sample data collection object"""
-    return InputData(conn=datacon, ids=test_sample_ids)
+    return InputDataGetter(conn=datacon, ids=test_sample_ids)
 
 
 @pytest.fixture(scope="module")
-def testdata(input_data: InputData) -> Data:
+def testdata(input_data: InputDataGetter) -> Data:
     """a Data object wrapping the test data"""
     testdata = (
         Data(
@@ -118,7 +113,7 @@ def parafac2_ft(
 def decomp(parafac2_ft: PARAFAC2) -> Parafac2Tensor:
     """the decomp output of the PARAFAC2 estimator"""
 
-    return parafac2_ft.decomp
+    return parafac2_ft.decomp_
 
 
 @pytest.fixture(scope="module")
@@ -127,14 +122,18 @@ def testdata_filter_expr():
 
 
 @pytest.fixture(scope="module")
-def orc(
+def orc_loaded(
     test_sample_ids: list[str],
-    testcon: db.DuckDBPyConnection,
+    database_etl_db_path: str,
     testdata_filter_expr: pl.Expr,
     exec_id: str = "test",
 ):
     orc = Orchestrator(exec_id=exec_id)
-    orc.load_data(con=testcon, runids=test_sample_ids, filter_expr=testdata_filter_expr)
+    orc = orc.load_data(
+        input_db_path=database_etl_db_path,
+        runids=test_sample_ids,
+        filter_expr=testdata_filter_expr,
+    )
 
     return orc
 
@@ -151,3 +150,110 @@ def pfac2results(resultscon, decomp, XXX: XX):
     return Parafac2Results(conn=resultscon, decomp=decomp).create_datamart(
         input_imgs=XXX
     )
+
+
+@pytest.fixture(scope="module")
+def pers_results_db_path(path: str = "test_orc_results.db"):
+    if Path(path).exists:
+        return path
+    else:
+        return None
+
+
+@pytest.fixture(scope="module")
+def database_etl_db_url(database_etl_db_path: str):
+    return f"duckdb:///{database_etl_db_path}"
+
+
+@pytest.fixture(scope="module")
+def database_etl_db_engine(database_etl_db_url: str):
+    return create_engine(database_etl_db_url)
+
+
+@pytest.fixture(scope="module")
+def datacon():
+    return db.connect(TEST_DB_PATH, read_only=True)
+
+
+@pytest.fixture(scope="module")
+def test_sample_ids(datacon):
+    """get test sample ids"""
+    ids = [x[0] for x in datacon.execute("select runid from inc_chm").fetchall()]
+
+    return ids
+
+
+@pytest.fixture(scope="module")
+def param_grid():
+    return dict(parafac2__rank=9)
+
+
+@pytest.fixture(scope="module")
+def orc_get_pipeline_set_params(orc_loaded: Orchestrator, param_grid) -> Orchestrator:
+    return orc_loaded.get_pipeline().set_params(param_grid)
+
+
+@pytest.fixture(scope="module")
+def pipeline_output_con():
+    from pathlib import Path
+
+    return db.connect(Path(__file__).parent / "pipeline_output_con.db")
+
+
+@pytest.fixture(scope="module")
+def orc_run_pipeline(
+    orc_get_pipeline_set_params: Orchestrator,
+):
+    """
+    execute the pipeline in full.
+    """
+    return orc_get_pipeline_set_params.run_pipeline()
+
+
+@pytest.mark.skip
+def test_display_orc_results(orc_run_pipeline: Orchestrator):
+    app = orc_run_pipeline.results.results_dashboard()
+    import webbrowser
+
+    # host = "127.0.0.1"
+    port = "8050"
+    from threading import Timer
+
+    def open_browser():
+        webbrowser.open_new(url="http://127.0.0.1:8050")
+
+    Timer(2, open_browser).start()
+    app.run(port=port, debug=False)
+
+
+@pytest.fixture(scope="module")
+def results_db_path():
+    return ":memory:"
+
+
+@pytest.fixture(scope="module")
+def results_engine():
+    path = "test_results.db"
+    url = f"duckdb:///{path}"
+
+    if Path(path).exists():
+        Path(path).unlink()
+    return create_engine(url)
+
+
+@pytest.fixture(scope="module")
+def results_db():
+    results_db = ResultsDB(conn=db.connect())
+
+    return results_db
+
+
+@pytest.fixture(scope="module")
+def results_db_loaded(
+    orc_run_pipeline: Orchestrator,
+    results_db_path: str,
+):
+    results_db = orc_run_pipeline.load_results(output_db_path=results_db_path)
+    assert results_db
+
+    return results_db

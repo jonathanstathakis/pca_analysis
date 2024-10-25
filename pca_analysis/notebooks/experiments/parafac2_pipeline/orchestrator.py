@@ -5,12 +5,15 @@ from .pipeline import (
     create_pipeline,
 )
 from .pipeline_defs import DCols
-from .input_data import InputData
+from .input_data import InputDataGetter
 import logging
 from copy import deepcopy
 from typing import Self
 from sklearn.pipeline import Pipeline
 from .results_db import ResultsDB
+from sqlalchemy import Engine, create_engine
+
+import polars as pl
 
 logger = logging.getLogger(__name__)
 
@@ -47,13 +50,15 @@ class Orchestrator:
         - [ ] add preprocessing stages i.e. baseline subtraction
         """
         self._exec_id = exec_id
-        self.input_data = Data(**get_data_col_input())  # ignore
+        self.input_data: Data
         self._logfile = Path(__file__).parent / "pipeline_log"
         self._pipeline: Pipeline
         self.results = None
         self._con_input: db.DuckDBPyConnection
         self._con_output: db.DuckDBPyConnection
-        self._runids: list[str]
+        self._runids: pl.DataFrame
+        self._wavelength_labels: pl.DataFrame
+        self._time_labels: pl.DataFrame
 
     def __repr__(self):
         repr_str = f"""
@@ -75,7 +80,11 @@ class Orchestrator:
         return repr_str
 
     def load_data(
-        self, conn: db.DuckDBPyConnection, runids: list[str], filter_expr=None
+        self,
+        input_db_path: str,
+        runids: list[str],
+        # wavelength_labels: list[int],
+        filter_expr=None,
     ):
         """
         Load the specified samples from the database with a optional filter expression.
@@ -92,14 +101,15 @@ class Orchestrator:
         logger.info("loading data..")
 
         orc_ = deepcopy(self)
-        orc_._con_input = conn
-        raw_input_data = InputData(conn=orc_._con_input, ids=runids)
+        orc_._con_input = db.connect(input_db_path)
 
-        orc_.input_data = orc_.input_data.load_data(raw_input_data)
+        raw_data_extractor = InputDataGetter(conn=orc_._con_input, ids=runids)
+
+        orc_.input_data = Data(**get_data_col_input())  # ignore
+
+        orc_.input_data = orc_.input_data.load_data(raw_data_extractor)
 
         orc_.input_data = orc_.input_data.filter_nm_tbl(expr=filter_expr)
-
-        orc_._runids = orc_.input_data._scalar_tbl["runid"].to_list()
 
         return orc_
 
@@ -144,6 +154,10 @@ class Orchestrator:
 
         X = _orc.input_data.to_X()
 
+        _orc._runids = X.runids
+        _orc._wavelength_labels = X.wavelength_labels
+        _orc._time_labels = X.time_labels
+
         # to capture print for logs. See <https://johnpaton.net/posts/redirect-logging/>
         import contextlib
 
@@ -158,18 +172,25 @@ class Orchestrator:
 
     def load_results(
         self,
-        output_con: db.DuckDBPyConnection = db.connect(),
+        output_db_path: str,
+        # output_con: db.DuckDBPyConnection = db.connect(),
     ) -> ResultsDB:
         """load pipeline results into a database, returning a ResultsDB object that provides methods of viewing the results"""
 
         pipeline = self._pipeline
 
+        url = f"duckdb:///{output_db_path}"
+        
         results_db = ResultsDB(
-            conn=output_con,
+            engine=create_engine(url),
         )
 
-        results_db.load_results(
-            self._exec_id, self._runids, steps="all", pipeline=pipeline
+        results_db.load_new_results(
+            self._exec_id,
+            self._runids,
+            steps="all",
+            pipeline=pipeline,
+            wavelength_labels=self._wavelength_labels,
         )
 
         return results_db

@@ -1,4 +1,4 @@
-from pca_analysis.notebooks.experiments.parafac2_pipeline.parafac2results import (
+from pca_analysis.notebooks.experiments.parafac2_pipeline.parafac2db import (
     Pfac2Loader,
 )
 from tensorly.parafac2_tensor import Parafac2Tensor
@@ -25,12 +25,11 @@ def pfac2loader(
     decomp: Parafac2Tensor,
     exec_id: str = "pfac2loader_test",
 ):
-    ...
 
     assert pfac2loader_conn
     assert decomp
 
-    loader = Pfac2Loader(exec_id=exec_id, decomp=decomp, conn=pfac2loader_conn)
+    loader = Pfac2Loader(exec_id=exec_id, decomp=decomp, output_conn=pfac2loader_conn)
 
     return loader
 

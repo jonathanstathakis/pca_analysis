@@ -1,33 +1,35 @@
-import duckdb as db
 from .estimators import BCorr_ASLS, PARAFAC2
 from .core_tables import CoreTablesDB, CoreTbls
-from .parafac2db import PARAFAC2DB, Parafac2Tables
+from .parafac2db import Parafac2Tables
 from .bcorrdb import BCorrDB, BcorrTbls
 from .pipeline import PipeSteps
 import logging
+import polars as pl
 
 logger = logging.getLogger(__name__)
+from sqlalchemy import Engine, text
+from .parafac2db import PARAFAC2DB
 
 
 class ResultsDB:
-    def __init__(self, conn: db.DuckDBPyConnection):
-        """the results database"""
+    def __init__(self, engine: Engine):
+        """the results database
 
-        self._conn = conn
-        self.core_tables = CoreTablesDB(conn=self._conn)
-        self.parafac2_db = PARAFAC2DB(output_conn=self._conn)
-        self.bcorrdb = BCorrDB(output_conn=self._conn)
+        TODO: swap to ORM
+        """
+        self._engine = engine
+        self.parafac2db = PARAFAC2DB(engine=self._engine)
+
+        self.core_tables = CoreTablesDB(engine=self._engine)
+        # self.parafac2_db = PARAFAC2DB(output_conn=self._conn)
+        self.bcorrdb = BCorrDB(engine=self._engine)
 
         self.core_tbls = CoreTbls
         self.parafac2_tbls = Parafac2Tables
         self.bcorr_tbls = BcorrTbls
 
-    def load_results(
-        self,
-        exec_id,
-        runids,
-        steps,
-        pipeline,
+    def load_new_results(
+        self, exec_id, runids, steps, pipeline, wavelength_labels: list[int]
     ):
         logger.debug("loading results..")
 
@@ -45,62 +47,52 @@ class ResultsDB:
 
         if str(PipeSteps.BCORR) in steps:
             bcorr_est: BCorr_ASLS = pipeline.named_steps[PipeSteps.BCORR]
-            bc_loader = self.bcorrdb.get_loader(
+            bc_loader = self.bcorrdb.get_loader()
+            bc_loader.load_results(
                 exec_id=exec_id,
                 baselines=bcorr_est.bline_slices_,
                 corrected=bcorr_est.Xt,
+                runids=runids,
+                wavelength_labels=wavelength_labels,
             )
-
-            bc_loader.load_results()
 
         logger.debug("bcorr results ETL complete.")
 
         if str(PipeSteps.PARAFAC2) in steps:
             parafac2_est: PARAFAC2 = pipeline.named_steps[PipeSteps.PARAFAC2]
 
-            loader = self.parafac2_db.get_loader(
+            loader = self.parafac2db.get_loader(
                 exec_id=exec_id,
                 decomp=parafac2_est.decomp_,
+                runids=runids,
             )
 
             loader.create_datamart()
 
         logger.debug("results loading complete.")
 
-    def _clear_database(self):
-        """call to delete all rows of all tables of the database"""
-
-        # clear parafac2 tables
-        self.parafac2_db.clear_tables()
-
-        # clear bcorr tables
-        self.bcorrdb.clear_tables()
-
-        # clear core tables
-        self.core_tables.clear_tables()
-
     def _get_all_table_names(self):
         table_names = (
-            list(self.bcorr_tbls) + list(self.core_tbls) + list(self.parafac2_tbls)
+            pl.read_database(
+                "select distinct table_name from information_schema.tables",
+                self._engine,
+            )
+            .get_column("table_name")
+            .to_list()
         )
-
-        if not len(table_names) == len(set(table_names)):
-            raise ValueError("duplicate tables names detected. Check table name enums")
         return table_names
 
     def _get_database_report(self):
         counts = []
+
         for table in self._get_all_table_names():
-            count = self._conn.execute(
-                f"""
-                select '{table}'     as table, count(*) as count from {table}
-                """
-            ).pl()
+            with self._engine.connect() as conn:
+                query = f"""
+                    select '{table}' as table, count(*) as count from {table}
+                    """
+                count = pl.read_database(query, conn)
 
             counts.append(count)
-
-        import polars as pl
-
         counts = pl.concat(counts)
 
         return counts

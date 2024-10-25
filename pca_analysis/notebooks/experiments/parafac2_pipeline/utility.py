@@ -2,6 +2,7 @@
 misc functions
 """
 
+import duckdb as db
 import polars as pl
 import plotly.express as px
 
@@ -21,3 +22,39 @@ def plot_imgs(
             width=1500,
         )
     ).update_layout(margin=dict(t=50, l=50, b=50, r=50))
+
+
+def write_to_db(
+    signal_frame: pl.DataFrame,
+    table_name: str,
+    conn: db.DuckDBPyConnection,
+    overwrite: bool = False,
+) -> None:
+    if overwrite:
+        create_clause = "create or replace table"
+    else:
+        create_clause = "create table if not exists"
+    query = f"""--sql
+        {create_clause} {table_name} (
+        exec_id varchar not null,
+        sample int not null,
+        signal varchar not null,
+        wavelength int not null,
+        idx int not null,
+        abs float not null,
+        primary key (exec_id, sample, signal, wavelength, idx)
+        );
+
+        insert or replace into {table_name}
+            select
+                exec_id,
+                sample,
+                signal,
+                wavelength,
+                idx,
+                abs
+            from
+                signal_frame
+        """
+
+    conn.execute(query)

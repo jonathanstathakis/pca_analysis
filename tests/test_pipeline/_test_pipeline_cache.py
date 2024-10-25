@@ -39,9 +39,9 @@ def pipeline_cache(delete, list, show, clear):
     if delete:
         cache.clear_cache()
     if list:
-        print("items in cache:", cache.cached)
+        print("items in cache:", cache._cached)
     if show:
-        print(f"cache_path: {cache._cache_root}")
+        print(f"cache_path: {cache._cache_db_path}")
     if clear:
         cache.remove_cached_obj(key=clear)
 

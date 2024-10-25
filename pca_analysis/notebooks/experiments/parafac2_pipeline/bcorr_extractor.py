@@ -10,5 +10,5 @@ class BCorrExtractor:
 
     def extract_tables(self):
         """
-        got 
+        got
         """

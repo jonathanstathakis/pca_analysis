@@ -4,7 +4,7 @@ from collections import UserList
 import polars as pl
 
 
-class InputData(UserList):
+class InputDataGetter(UserList):
     def __init__(self, conn: db.DuckDBPyConnection, ids: list[str]):
         """a wrapper around the list data container for validation. Essentially wraps
         database_etl's `get_data`
@@ -12,11 +12,21 @@ class InputData(UserList):
         TODO: add validation
         """
 
-        self.data = get_data(output="tuple", con=conn, runids=ids)
+        self.data: list
+        self._conn = conn
+        self.ids = ids
 
         assert True
 
-    def to_long_tables(self) -> tuple[pl.DataFrame, pl.DataFrame]:
+    def get_data_as_list_of_tuples(self):
+        result = get_data(output="tuple", con=self._conn, runids=self.ids)
+
+        if isinstance(result, list):
+            self.data = result
+        else:
+            raise TypeError
+
+    def as_long_tables(self) -> tuple[pl.DataFrame, pl.DataFrame]:
         """
         Convert InputData to two long polars dataframe tables, one for the image data
         and the second for the sample metadata

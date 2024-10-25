@@ -11,7 +11,7 @@ def test_data_dir():
 
 
 @pytest.fixture(scope="module")
-def test_db_path() -> Path:
+def database_etl_db_path() -> Path:
     return Path(test_defs.TEST_OUTPUT_PATH / "test_db.db")
 
 
@@ -31,5 +31,5 @@ def dirty_st_path() -> Path:
 
 
 @pytest.fixture(scope="module")
-def testcon(test_db_path: Path):
-    return db.connect(test_db_path)
+def testcon(database_etl_db_path: Path):
+    return db.connect(database_etl_db_path)

@@ -13,7 +13,7 @@ def agilette():
 @pytest.fixture
 def create_agilette_database(
     test_data_dir: Path,
-    test_db_path: Path,
+    database_etl_db_path: Path,
     agilette: Agilette,
     ct_un: str,
     ct_pw: str,
@@ -27,14 +27,14 @@ def create_agilette_database(
         test_data_dir,
         ct_un=ct_un,
         ct_pw=ct_pw,
-        con=db.connect(str(test_db_path)),
+        con=db.connect(str(database_etl_db_path)),
         dirty_st_path=dirty_st_path,
         excluded_samples=[dict()],
         run_extraction=True,
         overwrite=True,
     )
 
-    return test_db_path
+    return database_etl_db_path
 
 
 logger = logging.getLogger(__name__)

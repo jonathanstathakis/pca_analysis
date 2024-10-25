@@ -1,13 +1,11 @@
 import logging
-from enum import StrEnum
 
 import numpy as np
 import plotly.graph_objects as go
-import polars as pl
-from numpy.typing import NDArray
 from pybaselines import Baseline
 from sklearn.base import BaseEstimator, TransformerMixin
 from tensorly.decomposition import parafac2 as tl_parafac2
+
 
 logger = logging.getLogger(__name__)
 
@@ -382,42 +380,3 @@ class BCorr_SNIP(TransformerMixin, BaseEstimator):
         # Here, our transformer does not do any operation in `fit` and only validate
         # the parameters. Thus, it is stateless.
         return {"stateless": True}
-
-
-class BCRCols(StrEnum):
-    """BaselineCorrectionResultsColumns"""
-
-    SAMPLE = "sample"
-    IDX = "idx"
-    WAVELENGTH = "wavelength"
-    ABS = "abs"
-    SIGNAL = "signal"
-
-
-class SignalNames(StrEnum):
-    CORR = "corrected"
-    BLINE = "baseline"
-    INPUT = "input"
-
-
-def to_dataframe(arrs: list[NDArray], signal_name=None):
-    df = (
-        pl.concat(
-            [
-                pl.DataFrame(x)
-                .with_columns(pl.lit(idx).alias(BCRCols.SAMPLE))
-                .with_row_index(BCRCols.IDX)
-                for idx, x in enumerate(arrs)
-            ]
-        )
-        .unpivot(
-            index=[BCRCols.SAMPLE, BCRCols.IDX],
-            variable_name=BCRCols.WAVELENGTH,
-            value_name=BCRCols.ABS,
-        )
-        .with_columns(pl.col(BCRCols.WAVELENGTH).str.replace("column_", "").cast(int))
-    )
-
-    if signal_name:
-        df = df.with_columns(pl.lit(signal_name).alias(BCRCols.SIGNAL))
-    return df

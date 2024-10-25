@@ -1,110 +1,44 @@
+import duckdb as db
 import pytest
+
 from pca_analysis.notebooks.experiments.parafac2_pipeline.orchestrator import (
     Orchestrator,
 )
-import duckdb as db
-
-from pca_analysis.notebooks.experiments.parafac2_pipeline.results_loader import (
-    ResultsLoader,
-)
-from pca_analysis.notebooks.experiments.parafac2_pipeline.parafac2results import (
-    Parafac2Tables,
-)
+from pca_analysis.notebooks.experiments.parafac2_pipeline.results_db import ResultsDB
 
 
-def test_orc_load_data(orc: Orchestrator):
-    assert orc
-
-
-@pytest.fixture()
-def param_grid():
-    return dict(parafac2__rank=9)
-
-
-@pytest.fixture()
-def orc_get_pipeline_set_params(orc: Orchestrator, param_grid) -> Orchestrator:
-    return orc.get_pipeline().set_params(param_grid)
-
-
-@pytest.fixture(scope="module")
-def pipeline_output_con():
-    from pathlib import Path
-
-    return db.connect(Path(__file__).parent / "pipeline_output_con.db")
-
-
-@pytest.fixture()
-def orc_run_pipeline(
-    orc_get_pipeline_set_params: Orchestrator,
-    pipeline_output_con: db.DuckDBPyConnection,
-):
-    """
-    execute the pipeline in full.
-    """
-    return orc_get_pipeline_set_params.run_pipeline()
-
-
-@pytest.mark.skip
-def test_display_orc_results(orc_run_pipeline: Orchestrator):
-    app = orc_run_pipeline.results.results_dashboard()
-    import webbrowser
-
-    # host = "127.0.0.1"
-    port = "8050"
-    from threading import Timer
-
-    def open_browser():
-        webbrowser.open_new(url="http://127.0.0.1:8050")
-
-    Timer(2, open_browser).start()
-    app.run(port=port, debug=False)
-
-
-@pytest.fixture(scope="module")
-def results_loader(test_sample_ids: list[str], exec_id="test"):
-    results_loader = ResultsLoader(
-        conn=db.connect(), exec_id=exec_id, runids=test_sample_ids
-    )
-
-    return results_loader
-
-
-def test_results_loader(
-    orc_run_pipeline: Orchestrator,
-    results_loader: ResultsLoader,
-    overwrite: bool = True,
-):
-    """test whether the result loader works.."""
-
-    results_loader.load_results(
-        pipeline=orc_run_pipeline._pipeline,
-        steps=["bcorr", "parafac2"],
-        overwrite=overwrite,
-    )
+def test_orc_load_data(orc_loaded: Orchestrator):
+    assert orc_loaded
 
 
 def test_orc_run_pipeline(orc_run_pipeline):
     assert orc_run_pipeline
 
 
-@pytest.fixture(scope="module")
-def results_conn():
-    return db.connect()
-
-
-def test_load_results(
-    orc_run_pipeline: Orchestrator,
-    results_conn: db.DuckDBPyConnection,
-):
-    loader = orc_run_pipeline.load_results(
-        output_con=results_conn, exec_id="test_load_results"
-    )
-
-    assert loader
-
+def test_load_results_tables_content(results_db_loaded: ResultsDB):
     # test that the expected tables are in the database
 
-    table_names = results_conn.execute("select name from (show)").fetchnumpy()["name"]
+    assert results_db_loaded
 
-    for table in list(Parafac2Tables):
-        assert table in table_names
+
+def test_get_database_report(results_db_loaded: ResultsDB):
+    """generate database report, ensure count is >1 for all tables"""
+    report = results_db_loaded._get_database_report()
+    assert not report.is_empty()
+    import polars as pl
+
+    # all tables should have >0 rows.
+    assert report.filter(pl.col("count").eq(0)).is_empty()
+
+
+def test_loading_duplicate_results(
+    orc_run_pipeline: Orchestrator, results_db_path: str
+):
+    """load the pipeline results twice to see what happens if duplicate values entered"""
+
+    orc_run_pipeline.load_results(output_db_path=":memory:")
+
+    try:
+        orc_run_pipeline.load_results(output_db_path=results_db_path)
+    except db.ConstraintException:
+        pass

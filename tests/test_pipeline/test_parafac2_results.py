@@ -1,4 +1,4 @@
-from pca_analysis.notebooks.experiments.parafac2_pipeline.parafac2results import (
+from pca_analysis.notebooks.experiments.parafac2_pipeline.parafac2db import (
     Parafac2Results,
 )
 import pytest

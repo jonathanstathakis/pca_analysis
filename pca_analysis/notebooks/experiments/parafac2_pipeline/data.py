@@ -1,7 +1,9 @@
 import polars as pl
 from typing import Self
 from pca_analysis.notebooks.experiments.parafac2_pipeline.utility import plot_imgs
-from pca_analysis.notebooks.experiments.parafac2_pipeline.input_data import InputData
+from pca_analysis.notebooks.experiments.parafac2_pipeline.input_data import (
+    InputDataGetter,
+)
 import plotly.graph_objects as go
 from collections import UserList
 from pca_analysis.notebooks.experiments.parafac2_pipeline.pipeline_defs import DCols
@@ -9,23 +11,29 @@ from copy import deepcopy
 
 
 class XX(UserList):
-    def __init__(self, nm_tbl: pl.DataFrame, time_tbl: pl.DataFrame):
+    def __init__(self, nm_tbl: pl.DataFrame):
         X_dict = nm_tbl.drop(DCols.TIME).partition_by(DCols.RUNID, as_dict=True)
+
+        # this assumes that all samples have the same wavelengths. I believe this is
+        # precluded by the formation of nm_tbl in Data..
+
+        self.wavelength_labels = pl.DataFrame(
+            {"wavelength": [int(x) for x in nm_tbl.drop("runid", "mins").columns]}
+        ).with_row_index("wavelength_idx")
 
         # used for reconstruction
         self.X_schemas = {
             runid[0]: df.drop(DCols.RUNID).schema for runid, df in X_dict.items()
         }
 
-        self.runids = [str(x) for x in self.X_schemas.keys()]
+        self.runids = pl.DataFrame(
+            {DCols.RUNID: [str(x) for x in self.X_schemas.keys()]}
+        ).with_row_index("runid_idx")
 
         # time labels by sample
-        self.time_labels = {
-            runid: time_tbl.filter(pl.col(DCols.RUNID) == runid)
-            .select(DCols.TIME)
-            .sort(by=DCols.TIME)
-            for runid in self.X_schemas.keys()
-        }
+        self.time_labels = nm_tbl.select("runid", "mins").with_columns(
+            pl.col("mins").rank("dense").over("runid").alias("time_label_idx")
+        )
 
         self.data = [
             X.drop(DCols.RUNID).to_numpy(writable=True) for X in X_dict.values()
@@ -86,7 +94,9 @@ class Data:
         # wavelength range
 
     def load_data(
-        self, data: InputData, drop_samples: list[str] = ["82", "0151"]
+        self,
+        raw_data_extractor: InputDataGetter,
+        drop_samples: list[str] = ["82", "0151"],
     ) -> Self:
         """
         load the imgs and metadata tables from the data object
@@ -99,11 +109,14 @@ class Data:
         :return: a loaded copy of this object
         :rtype: Self
         """
-        if not isinstance(data, InputData):
-            raise TypeError(f"Expecting an InputData object, got {type(data)}")
+        if not isinstance(raw_data_extractor, InputDataGetter):
+            raise TypeError(
+                f"Expecting an InputData object, got {type(raw_data_extractor)}"
+            )
 
         self_ = deepcopy(self)
-        imgs, mta = data.to_long_tables()
+        raw_data_extractor.get_data_as_list_of_tuples()
+        imgs, mta = raw_data_extractor.as_long_tables()
         imgs = imgs.pipe(_preprocess_imgs, drop_samples)
 
         self_._load_imgs(imgs)
@@ -269,7 +282,7 @@ class Data:
         :rtype: XX
         """
 
-        return XX(nm_tbl=self.nm_tbl_as_wide(), time_tbl=self._time_tbl)
+        return XX(nm_tbl=self.nm_tbl_as_wide())
 
     def nm_tbl_as_wide(self) -> pl.DataFrame:
         """
