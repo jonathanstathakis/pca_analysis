@@ -16,8 +16,6 @@ class InputDataGetter(UserList):
         self._conn = conn
         self.ids = ids
 
-        assert True
-
     def get_data_as_list_of_tuples(self):
         result = get_data(output="tuple", con=self._conn, runids=self.ids)
 

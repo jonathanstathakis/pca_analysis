@@ -9,6 +9,7 @@ import polars as pl
 logger = logging.getLogger(__name__)
 from sqlalchemy import Engine, text
 from .parafac2db import PARAFAC2DB
+from sklearn.pipeline import Pipeline
 
 
 class ResultsDB:
@@ -29,7 +30,12 @@ class ResultsDB:
         self.bcorr_tbls = BcorrTbls
 
     def load_new_results(
-        self, exec_id, runids, steps, pipeline, wavelength_labels: list[int]
+        self,
+        exec_id: str,
+        runids: list[str],
+        steps: list[str],
+        pipeline: Pipeline,
+        wavelength_labels: list[int],
     ):
         logger.debug("loading results..")
 
@@ -65,6 +71,7 @@ class ResultsDB:
                 exec_id=exec_id,
                 decomp=parafac2_est.decomp_,
                 runids=runids,
+                wavelength_labels=wavelength_labels,
             )
 
             loader.create_datamart()

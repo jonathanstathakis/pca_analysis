@@ -36,9 +36,17 @@ dash = "^2.18.1"
 dash-bootstrap-components = "^1.6.0"
 waitress = "^3.0.0"
 duckdb-engine = "^0.13.4"
+dash-extensions = "^1.0.18"
+dash-ag-grid = "^31.2.0"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.logging]
+log_cli = true
+log_cli_level = "DEBUG"
+log_format = "%(asctime)s [%(levelname)s] %(message)s (%(filename)s:%(lineno)s)"
+log_date_format = "%Y-%m-%d %H:%M:%S"
 
 [tool.pytest.ini_options]
 log_cli = true

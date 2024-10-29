@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 from .core_tables import ResultNames
 from sqlalchemy.orm import Session
 from sqlalchemy import Engine
-from .orm import Base
+from .orm import ParafacResultsBase
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import ForeignKey
 from sqlalchemy import Index
@@ -44,16 +44,18 @@ class BCRCols(StrEnum):
     SIGNAL = "signal"
 
 
-class BCorr(Base):
+class BCorr(ParafacResultsBase):
     __tablename__ = "baseline_correction"
     exec_id: Mapped[str] = mapped_column(
         ForeignKey("exec_id.exec_id"), primary_key=True
     )
-    result_id: Mapped[str] = mapped_column(ForeignKey("result_id.result_id"))
-    runid: Mapped[str] = mapped_column(ForeignKey("samples.runid"))
-    signal: Mapped[str] = mapped_column(nullable=False)
-    wavelength: Mapped[int] = mapped_column(nullable=False)
-    time_idx: Mapped[int] = mapped_column(nullable=False)
+    result_id: Mapped[str] = mapped_column(
+        ForeignKey("result_id.result_id"), primary_key=True
+    )
+    runid: Mapped[str] = mapped_column(ForeignKey("runids.runid"), primary_key=True)
+    signal: Mapped[str] = mapped_column(nullable=False, primary_key=True)
+    wavelength: Mapped[int] = mapped_column(nullable=False, primary_key=True)
+    time_idx: Mapped[int] = mapped_column(nullable=False, primary_key=True)
     abs: Mapped[float] = mapped_column(nullable=False)
 
 
@@ -116,8 +118,8 @@ class BCorrLoader:
 
     def load_results(
         self,
-        runids: pl.DataFrame,
-        wavelength_labels: pl.DataFrame,
+        runids: list[str],
+        wavelength_labels: list[str],
         exec_id: str,
         corrected: list[NDArray],
         baselines: list[NDArray],
@@ -132,41 +134,41 @@ class BCorrLoader:
         self._exec_id = exec_id
         self._result_id = result_name
 
-        corr_df = to_dataframe(self.corrected, signal_name=SignalNames.CORR)
-        bline_df = to_dataframe(self.baselines, signal_name=SignalNames.BLINE)
-
-        self.df = (
-            pl.concat([corr_df, bline_df])
-            .sort(
-                BCRCols.SAMPLE_IDX,
-                BCRCols.SIGNAL,
-                BCRCols.WAVELENGTH_IDX,
-                BCRCols.TIME_IDX,
-            )
-            .with_columns(
-                pl.lit(self._exec_id).alias("exec_id"),
-                pl.lit(self._result_id).alias("result_id"),
-            )
-        )
-
-        # label the sample runids based on their order of apparance in the BCorr
-        # Estimator
-        # note that this hasnt been verified..
-
-        runids_ = runids.rename({"runid_idx": "sample_idx"})
-
-        self.df = self.df.join(
-            runids_,
-            on=[BCRCols.SAMPLE_IDX],
-        )
-
-        self.df = self.df.join(wavelength_labels, on=BCRCols.WAVELENGTH_IDX)
+        ParafacResultsBase.metadata.create_all(self._engine, tables=[BCorr.__table__])
 
         self._insert_into_result_id()
 
-        self.df.write_database(
-            BCorr.__tablename__, self._engine, if_table_exists="append"
-        )
+        with Session(self._engine) as session:
+            for ss, sample in enumerate(self.corrected):
+                for tt, time_point in enumerate(sample):
+                    for nm_idx, abs in enumerate(time_point):
+                        bcorr = BCorr(
+                            exec_id=self._exec_id,
+                            result_id=self._result_id,
+                            runid=runids[ss],
+                            signal=SignalNames.CORR,
+                            wavelength=wavelength_labels[nm_idx],
+                            time_idx=tt,
+                            abs=abs,
+                        )
+
+                        session.add(bcorr)
+
+            for ss, sample in enumerate(self.baselines):
+                for tt, time_point in enumerate(sample):
+                    for nm_idx, abs in enumerate(time_point):
+                        bcorr = BCorr(
+                            exec_id=self._exec_id,
+                            result_id=self._result_id,
+                            runid=runids[ss],
+                            signal=SignalNames.BLINE,
+                            wavelength=wavelength_labels[nm_idx],
+                            time_idx=tt,
+                            abs=abs,
+                        )
+
+                        session.add(bcorr)
+            session.commit()
 
         logger.debug(("baseline correction table written."))
 

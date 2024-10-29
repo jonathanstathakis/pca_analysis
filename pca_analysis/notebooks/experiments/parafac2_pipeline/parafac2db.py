@@ -15,29 +15,29 @@ from tensorly.parafac2_tensor import Parafac2Tensor, apply_parafac2_projections
 
 from .core_tables import CoreTbls, ResultNames
 from .data import XX
-from .orm import Base
+from .orm import ParafacResultsBase
 from .utility import plot_imgs
 
 pl.Config.set_tbl_width_chars(999)
 logger = logging.getLogger(__name__)
 
 
-class Components(Base):
+class Components(ParafacResultsBase):
     __tablename__ = "components"
     component: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
     exec_id: Mapped[str] = mapped_column(ForeignKey("exec_id.exec_id"))
     result_id: Mapped[str] = mapped_column(ForeignKey("result_id.result_id"))
 
 
-class A(Base):
+class A(ParafacResultsBase):
     __tablename__ = "A"
     result_id: Mapped[str] = mapped_column(ForeignKey("result_id.result_id"))
 
     exec_id: Mapped[str] = mapped_column(
         ForeignKey("exec_id.exec_id"), primary_key=True
     )
-    sample: Mapped[int] = mapped_column(
-        ForeignKey("samples.sample"),
+    runid: Mapped[int] = mapped_column(
+        ForeignKey("runids.runid"),
         primary_key=True,
     )
     component: Mapped[int] = mapped_column(
@@ -46,10 +46,9 @@ class A(Base):
     weight: Mapped[float] = mapped_column(nullable=False)
 
 
-class Bs(Base):
+class Bs(ParafacResultsBase):
     __tablename__ = "b_pure"
     runid: Mapped[str] = mapped_column(ForeignKey("runids.runid"), primary_key=True)
-    sample: Mapped[int] = mapped_column(ForeignKey("samples.sample"))
 
     exec_id: Mapped[str] = mapped_column(
         ForeignKey("exec_id.exec_id"),
@@ -67,7 +66,7 @@ class Bs(Base):
     value: Mapped[float] = mapped_column(nullable=False)
 
 
-class C(Base):
+class C(ParafacResultsBase):
     __tablename__ = "C_pure"
     exec_id: Mapped[str] = mapped_column(
         ForeignKey("exec_id.exec_id"), primary_key=True
@@ -78,19 +77,19 @@ class C(Base):
     component: Mapped[int] = mapped_column(
         ForeignKey("components.component"), primary_key=True
     )
-    spectral_point: Mapped[int] = mapped_column(primary_key=True)
+    wavelength: Mapped[int] = mapped_column(primary_key=True)
     value: Mapped[float] = mapped_column()
 
 
 component_slices_row_idx = Sequence("component_slices_row_idx")
 
 
-class ComponentSlices(Base):
+class ComponentSlices(ParafacResultsBase):
     __tablename__ = "component_slices"
     row_idx: Mapped[int] = mapped_column(
         component_slices_row_idx,
     )
-    sample: Mapped[int] = mapped_column(ForeignKey("samples.sample"), primary_key=True)
+    runid: Mapped[int] = mapped_column(ForeignKey("runids.runid"), primary_key=True)
     exec_id: Mapped[str] = mapped_column(
         ForeignKey("exec_id.exec_id"), primary_key=True
     )
@@ -100,12 +99,12 @@ class ComponentSlices(Base):
     component: Mapped[int] = mapped_column(
         ForeignKey("components.component"), primary_key=True
     )
-    spectral_point: Mapped[int] = mapped_column(primary_key=True)
+    wavelength: Mapped[int] = mapped_column(primary_key=True)
     elution_point: Mapped[int] = mapped_column(primary_key=True)
     abs: Mapped[float] = mapped_column(nullable=False)
 
 
-class SampleRecons(Base):
+class SampleRecons(ParafacResultsBase):
     __tablename__ = "sample_recons"
     exec_id: Mapped[str] = mapped_column(
         ForeignKey("exec_id.exec_id"), primary_key=True
@@ -113,8 +112,8 @@ class SampleRecons(Base):
     result_id: Mapped[str] = mapped_column(
         ForeignKey("result_id.result_id"), primary_key=True
     )
-    sample: Mapped[int] = mapped_column(ForeignKey("samples.sample"), primary_key=True)
-    spectral_point: Mapped[int] = mapped_column(primary_key=True)
+    runid: Mapped[int] = mapped_column(ForeignKey("runids.runid"), primary_key=True)
+    wavelength: Mapped[int] = mapped_column(primary_key=True)
     elution_point: Mapped[int] = mapped_column(primary_key=True)
     abs: Mapped[float] = mapped_column(nullable=False)
 
@@ -135,6 +134,7 @@ class Pfac2Loader:
         decomp: Parafac2Tensor,
         engine: Engine,
         runids: pl.DataFrame,
+        wavelength_labels: list[int],
         results_name: str = "parafac2",
     ):
         """
@@ -152,12 +152,13 @@ class Pfac2Loader:
         self._decomp = decomp
         self._result_id = results_name
         self._runids = runids
+        self._wavelength_labels = wavelength_labels
         self._A, self._Bs, self._C = apply_projections(self._decomp)
 
         self.n_components = self._A.shape[1]
         self.n_samples = self._A.shape[0]
         self.n_time_points = self._Bs[0].shape[0]
-        self.n_spectral_points = self._C.shape[0]
+        self.n_wavelengths = self._C.shape[0]
 
     def __repr__(self):
         repr_str = f"""
@@ -184,7 +185,7 @@ class Pfac2Loader:
         num. components: {self.n_components}
         num. samples: {self.n_samples}
         num. time points: {self.n_time_points}
-        num. spectral points: {self.n_spectral_points}
+        num. spectral points: {self.n_wavelengths}
 
         """
 
@@ -228,7 +229,9 @@ class Pfac2Loader:
 
         logger.debug("writing component table to db..")
 
-        Base.metadata.create_all(self._engine, tables=[Components.__table__])
+        ParafacResultsBase.metadata.create_all(
+            self._engine, tables=[Components.__table__]
+        )
 
         with Session(self._engine) as session:
             for component in np.arange(0, self.n_components, 1):
@@ -251,28 +254,23 @@ class Pfac2Loader:
         """
 
         logger.debug("writing table A..")
-        A_df = (
-            (
-                pl.DataFrame(
-                    self._A, schema=[str(x) for x in np.arange(0, self.n_components)]
-                )
-                .with_row_index("sample")
-                .unpivot(
-                    index=["sample"], variable_name="component", value_name="weight"
-                )
-            )
-            .with_columns(pl.lit(self._exec_id).alias("exec_id"))
-            .with_columns(pl.lit(self._result_id).alias("result_id"))
-        )
-        A_df.shape
 
-        Base.metadata.create_all(self._engine, tables=[A.__table__])
+        ParafacResultsBase.metadata.create_all(self._engine, tables=[A.__table__])
 
-        A_df.write_database(
-            table_name=A.__tablename__,
-            connection=self._engine,
-            if_table_exists="append",
-        )
+        with Session(self._engine) as session:
+            for ss, sample in enumerate(self._A):
+                for component, weight in enumerate(sample):
+                    session.add(
+                        A(
+                            exec_id=self._exec_id,
+                            result_id=self._result_id,
+                            runid=self._runids[ss],
+                            component=component,
+                            weight=weight,
+                        )
+                    )
+
+            session.commit()
 
         logger.debug("A written to db.")
 
@@ -281,65 +279,46 @@ class Pfac2Loader:
         Create a table containing the elution profile of each sample stacked samplewise
         """
 
+        ParafacResultsBase.metadata.create_all(self._engine, tables=[Bs.__table__])
+
         logger.debug("writing table B_pure..")
-        B_dfs = []
 
-        for idx, b in enumerate(self._Bs):
-            df = (
-                pl.DataFrame(b)
-                .with_columns(pl.lit(idx).cast(pl.UInt32).alias("sample"))
-                .with_row_index("elution_point")
-                .unpivot(
-                    index=["sample", "elution_point"],
-                    variable_name="component",
-                    value_name="value",
-                )
-                .with_columns(
-                    pl.col("component").str.replace("column_", "").cast(pl.UInt32)
-                )
-                .with_columns(pl.lit(self._exec_id).alias("exec_id"))
-                .with_columns(pl.lit(self._result_id).alias("result_id"))
-            ).join(self._runids, left_on="sample", right_on="runid_idx")
+        with Session(self._engine) as session:
+            for ss, sample in enumerate(self._Bs):
+                for tt, time_point in enumerate(sample):
+                    for component, abs in enumerate(time_point):
+                        session.add(
+                            Bs(
+                                runid=self._runids[ss],
+                                exec_id=self._exec_id,
+                                result_id=self._result_id,
+                                component=component,
+                                elution_point=tt,
+                                value=abs,
+                            )
+                        )
 
-            B_dfs.append(df)
-
-        Base.metadata.create_all(self._engine, tables=[Bs.__table__])
-
-        for df in B_dfs:
-            df.write_database(
-                table_name=Bs.__tablename__,
-                connection=self._engine,
-                if_table_exists="append",
-            )
+            session.commit()
 
         logger.debug("Bs written to db..")
 
     def _create_table_C(self):
         """create the C table, the spectral profile of the components"""
         logger.debug("writing table C..")
-        # create the df with an index, long
-        C_df = (
-            pl.DataFrame(self._C)
-            .with_row_index("spectral_point")
-            .unpivot(
-                index="spectral_point", variable_name="component", value_name="value"
-            )
-            .with_columns(pl.col("component").str.replace("column_", "").cast(int))
-        )
-        # insert it into the db
 
-        Base.metadata.create_all(self._engine, tables=[C.__table__])
+        ParafacResultsBase.metadata.create_all(self._engine, tables=[C.__table__])
 
         with Session(self._engine) as session:
-            for row in C_df.rows(named=True):
-                c = C(
-                    exec_id=self._exec_id,
-                    result_id=self._result_id,
-                    component=row["component"],
-                    spectral_point=row["spectral_point"],
-                    value=row["value"],
-                )
-
+            for pp, point in enumerate(self._C):
+                for cc, component in enumerate(point):
+                    wavelength = self._wavelength_labels[pp]
+                    c = C(
+                        exec_id=self._exec_id,
+                        result_id=self._result_id,
+                        component=cc,
+                        wavelength=wavelength,
+                        value=component,
+                    )
                 session.add(c)
             session.commit()
 
@@ -393,23 +372,19 @@ class Pfac2Loader:
         """
         df = (
             pl.DataFrame(slice)
-            .with_columns(
-                pl.lit(sample_idx).alias("sample"),
-                pl.lit(component_idx).alias("component"),
-            )
             .with_row_index("elution_point")
             .unpivot(
                 index=["sample", "component", "elution_point"],
-                variable_name="spectral_point",
+                variable_name="wavelength",
                 value_name="abs",
             )
-            .with_columns(pl.col("spectral_point").str.replace("column_", "").cast(int))
-            .sort(["sample", "component", "spectral_point", "elution_point"])
+            .with_columns(pl.col("wavelength").str.replace("column_", "").cast(int))
+            .sort(["sample", "component", "wavelength", "elution_point"])
             .select(
                 [
                     "sample",
                     "component",
-                    "spectral_point",
+                    "wavelength",
                     "elution_point",
                     "abs",
                 ]
@@ -417,7 +392,7 @@ class Pfac2Loader:
         )
 
         dups = df.select(
-            "sample", "component", "spectral_point", "elution_point"
+            "sample", "component", "wavelength", "elution_point"
         ).is_duplicated()
 
         if dups.any():
@@ -434,38 +409,28 @@ class Pfac2Loader:
         component_tensors = self._construct_component_tensors(
             A=self._A, Bs=self._Bs, C=self._C
         )
-        # flatten into a dataframe
-        flat_dfs = []
-        for sample_idx, tensor in enumerate(component_tensors):
-            for component_idx, slice in enumerate(tensor):
-                # check for duplicates in primary key
 
-                flat_dfs.append(
-                    self._create_component_tensor_df(slice, sample_idx, component_idx)
-                )
-
-        component_df = pl.concat(flat_dfs)
-
-        Base.metadata.create_all(self._engine, tables=[ComponentSlices.__table__])
+        ParafacResultsBase.metadata.create_all(
+            self._engine, tables=[ComponentSlices.__table__]
+        )
 
         with Session(self._engine) as session:
-            for row in component_df.rows(named=True):
-                slice_row = ComponentSlices(
-                    exec_id=self._exec_id,
-                    result_id=self._result_id,
-                    sample=row["sample"],
-                    component=row["component"],
-                    spectral_point=row["spectral_point"],
-                    elution_point=row["elution_point"],
-                    abs=row["abs"],
-                )
+            for sample_idx, tensor in enumerate(component_tensors):
+                for component_idx, slice in enumerate(tensor):
+                    for tt, time_point in enumerate(slice):
+                        for wavelength_idx, abs in enumerate(time_point):
+                            slice_row = ComponentSlices(
+                                exec_id=self._exec_id,
+                                result_id=self._result_id,
+                                runid=self._runids[sample_idx],
+                                component=component_idx,
+                                wavelength=self._wavelength_labels[wavelength_idx],
+                                elution_point=tt,
+                                abs=abs,
+                            )
 
-                session.add(slice_row)
-
-            try:
-                session.commit()
-            except IntegrityError as e:
-                raise e
+                            session.add(slice_row)
+            session.commit()
 
         logger.debug("component sliced added to db.")
 
@@ -479,7 +444,9 @@ class Pfac2Loader:
 
         # join all the tables together and sum. This can be done by pivoting on component
 
-        Base.metadata.create_all(self._engine, tables=[SampleRecons.__table__])
+        ParafacResultsBase.metadata.create_all(
+            self._engine, tables=[SampleRecons.__table__]
+        )
 
         create_piv_tbl = f"""--sql
         create temporary table piv as (
@@ -487,9 +454,9 @@ class Pfac2Loader:
                 (select
                     exec_id,
                     result_id,
-                    sample,
+                    runid,
                     component,
-                    spectral_point,
+                    wavelength,
                     elution_point,
                     abs
                     from
@@ -502,8 +469,8 @@ class Pfac2Loader:
             order by
                 exec_id,
                 result_id,
-                sample,
-                spectral_point,
+                runid,
+                wavelength,
                 elution_point
             );"""
 
@@ -511,9 +478,10 @@ class Pfac2Loader:
         create temporary table recon as (
                 select
                     exec_id as exec_id,
+                    runid as runid,
                     result_id as result_id,
-                    sample as sample,
-                    spectral_point as spectral_point,
+                    wavelength as wavelength,
+                    wavelength as wavelength,
                     elution_point as elution_point,
                     -- horizontal sum
                     list_sum(
@@ -522,8 +490,8 @@ class Pfac2Loader:
                                 * exclude(
                                     exec_id,
                                     result_id,
-                                    sample,
-                                    spectral_point,
+                                    runid,
+                                    wavelength,
                                     elution_point
                                             )
                                         )
@@ -539,8 +507,8 @@ class Pfac2Loader:
             select
                 exec_id,
                 result_id,
-                sample,
-                spectral_point,
+                runid,
+                wavelength,
                 elution_point,
                 abs
             from
@@ -549,6 +517,7 @@ class Pfac2Loader:
 
         with self._engine.connect() as conn:
             conn.begin()
+
             conn.execute(text(create_piv_tbl))
             conn.execute(text(create_recon_tbl))
             conn.execute(text(insert_into_sample_recons))
@@ -572,12 +541,12 @@ class Pfac2Loader:
                 .with_row_index("elution_point")
                 .unpivot(
                     index=["elution_point"],
-                    variable_name="spectral_point",
+                    variable_name="wavelength",
                     value_name="abs",
                 )
                 .with_columns(
                     pl.lit(sample_idx).alias("sample"),
-                    pl.col("spectral_point").str.replace("column_", "").cast(int),
+                    pl.col("wavelength").str.replace("column_", "").cast(int),
                 )
             )
 
@@ -588,15 +557,15 @@ class Pfac2Loader:
             """--sql
         create table input_imgs (
             sample int references samples(sample),
-            spectral_point integer not null,
+            wavelength integer not null,
             elution_point integer not null,
             abs float not null,
-            primary key (sample, spectral_point, elution_point)
+            primary key (sample, wavelength, elution_point)
         );
         insert into input_imgs
             select
                 sample,
-                spectral_point,
+                wavelength,
                 elution_point,
                 abs
             from
@@ -630,7 +599,7 @@ class Parafac2Results:
             select
                 sample,
                 component,
-                spectral_point,
+                wavelength,
                 elution_point,
                 abs
             from
@@ -638,7 +607,7 @@ class Parafac2Results:
             where
                 sample = ?
             and
-                spectral_point = ?
+                wavelength = ?
             """,
             parameters=[sample, wavelength],
         ).pl()
@@ -662,7 +631,7 @@ class Parafac2Results:
             """--sql
             select
                 sample,
-                spectral_point,
+                wavelength,
                 elution_point,
                 abs
             from
@@ -670,10 +639,10 @@ class Parafac2Results:
             where
                 sample = ?
             and
-                spectral_point = ?
+                wavelength = ?
             order by
                 sample,
-                spectral_point,
+                wavelength,
                 elution_point
             """,
             parameters=[sample, wavelength],
@@ -720,7 +689,7 @@ class Parafac2Results:
                 joined as (
                     select
                         sample,
-                        spectral_point,
+                        wavelength,
                         elution_point,
                         input.abs as input,
                         recon.abs as recon,
@@ -729,9 +698,9 @@ class Parafac2Results:
                     join
                         input_imgs as input
                     using
-                        (sample, spectral_point, elution_point)
+                        (sample, wavelength, elution_point)
                     where
-                    spectral_point = ?
+                    wavelength = ?
                     and
                         sample = ?)
             unpivot
@@ -742,7 +711,7 @@ class Parafac2Results:
                 name signal
                 value abs
             order by
-                sample, signal, spectral_point, elution_point
+                sample, signal, wavelength, elution_point
             """,
             parameters=[wavelength, sample],
         ).pl()
@@ -761,7 +730,7 @@ class Parafac2Results:
         :param wavelength: the wavelength included in the plot. If "all", includes all
         samples, if an integer, returns that sample, if list[int], returns all those
         wavelengths.
-        :facet_col: the column to facet on, either 'spectral_point' or 'sample'.
+        :facet_col: the column to facet on, either 'wavelength' or 'sample'.
         :return: faceted plot
         :rtype: go.Figure
         """
@@ -775,9 +744,9 @@ class Parafac2Results:
             prepared_sample_cond = ""
 
         if isinstance(wavelengths, list):
-            prepared_wavelength_cond = "spectral_point in ?"
+            prepared_wavelength_cond = "wavelength in ?"
         elif isinstance(wavelengths, int):
-            prepared_wavelength_cond = "spectral_point = ?"
+            prepared_wavelength_cond = "wavelength = ?"
         elif isinstance(wavelengths, str) and (wavelengths == "all"):
             prepared_wavelength_cond = ""
 
@@ -786,7 +755,7 @@ class Parafac2Results:
             joined as (
                 select
                     sample,
-                    spectral_point,
+                    wavelength,
                     elution_point,
                     input.abs as input,
                     recon.abs as recon
@@ -794,7 +763,7 @@ class Parafac2Results:
                     sample_recons as recon
                 join
                     input_imgs as input
-                using (sample, spectral_point, elution_point)
+                using (sample, wavelength, elution_point)
         """
 
         parameters = []
@@ -816,7 +785,7 @@ class Parafac2Results:
         else:
             conditions = ""
 
-        suffix = ") unpivot joined on input, recon into name signal value abs order by sample, signal, spectral_point, elution_point;"
+        suffix = ") unpivot joined on input, recon into name signal value abs order by sample, signal, wavelength, elution_point;"
 
         query = "".join([prefix, conditions, suffix])
 
@@ -860,7 +829,7 @@ class Parafac2Results:
 
         return df.pipe(
             plot_imgs,
-            nm_col="spectral_point",
+            nm_col="wavelength",
             abs_col="abs",
             time_col="elution_point",
             runid_col="sample",
@@ -876,7 +845,7 @@ class Parafac2Results:
         return (
             self._conn.execute("select * from sample_recons")
             .pl()
-            .pivot(index=["sample", "elution_point"], on="spectral_point", values="abs")
+            .pivot(index=["sample", "elution_point"], on="wavelength", values="abs")
             .sort(["sample", "elution_point"])
         )
 
@@ -1023,16 +992,14 @@ class PARAFAC2DB:
 
         self.loader: Pfac2Loader
         self.extractor: Pfac2Extractor
-
         self._engine = engine
-
-        ...
 
     def get_loader(
         self,
         exec_id: str,
         decomp: Parafac2Tensor,
         runids: list[str],
+        wavelength_labels: list[int],
         results_name: str = "parafac2",
     ) -> Pfac2Loader:
         return Pfac2Loader(
@@ -1041,6 +1008,7 @@ class PARAFAC2DB:
             engine=self._engine,
             results_name=results_name,
             runids=runids,
+            wavelength_labels=wavelength_labels,
         )
 
     def get_extractor(

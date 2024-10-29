@@ -44,10 +44,6 @@ class Orchestrator:
         persistent database)
 
         To obtain and inspect the results, access the `results` attribute generated in 3.
-
-        TODO
-        ----
-        - [ ] add preprocessing stages i.e. baseline subtraction
         """
         self._exec_id = exec_id
         self.input_data: Data
@@ -56,8 +52,8 @@ class Orchestrator:
         self.results = None
         self._con_input: db.DuckDBPyConnection
         self._con_output: db.DuckDBPyConnection
-        self._runids: pl.DataFrame
-        self._wavelength_labels: pl.DataFrame
+        self._runids: list[str]
+        self._wavelength_labels: list[int]
         self._time_labels: pl.DataFrame
 
     def __repr__(self):
@@ -81,7 +77,7 @@ class Orchestrator:
 
     def load_data(
         self,
-        input_db_path: str,
+        input_db_path: str | Path,
         runids: list[str],
         # wavelength_labels: list[int],
         filter_expr=None,
@@ -108,6 +104,16 @@ class Orchestrator:
         orc_.input_data = Data(**get_data_col_input())  # ignore
 
         orc_.input_data = orc_.input_data.load_data(raw_data_extractor)
+
+        if filter_expr:
+            orc_.input_data = orc_.input_data.filter_nm_tbl(expr=filter_expr)
+
+        return orc_
+
+    def select_data(self, filter_expr):
+        """direct subsetting of the input data range."""
+
+        orc_ = deepcopy(self)
 
         orc_.input_data = orc_.input_data.filter_nm_tbl(expr=filter_expr)
 
@@ -154,8 +160,8 @@ class Orchestrator:
 
         X = _orc.input_data.to_X()
 
-        _orc._runids = X.runids
-        _orc._wavelength_labels = X.wavelength_labels
+        _orc._runids = X.runids.get_column("runid").to_list()
+        _orc._wavelength_labels = X.wavelength_labels.get_column("wavelength").to_list()
         _orc._time_labels = X.time_labels
 
         # to capture print for logs. See <https://johnpaton.net/posts/redirect-logging/>
@@ -180,7 +186,7 @@ class Orchestrator:
         pipeline = self._pipeline
 
         url = f"duckdb:///{output_db_path}"
-        
+
         results_db = ResultsDB(
             engine=create_engine(url),
         )
