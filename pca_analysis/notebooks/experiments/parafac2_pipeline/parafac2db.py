@@ -127,6 +127,9 @@ class Parafac2Tables(StrEnum):
     SAMPLE_RECONS = "sample_recons"
 
 
+
+
+
 class Pfac2Loader:
     def __init__(
         self,
@@ -197,7 +200,7 @@ class Pfac2Loader:
         logger.debug(f"adding {self._result_id} to results_id..")
         with Session(self._engine) as session:
             result_name = ResultNames(result_id=self._result_id, exec_id=self._exec_id)
-            session.add(result_name)
+            session.merge(result_name)
             session.commit()
         logger.debug("wrote to result_id.")
 
@@ -241,7 +244,7 @@ class Pfac2Loader:
                     result_id=self._result_id,
                 )
 
-                session.add(component)
+                session.merge(component)
 
             session.commit()
 
@@ -260,7 +263,7 @@ class Pfac2Loader:
         with Session(self._engine) as session:
             for ss, sample in enumerate(self._A):
                 for component, weight in enumerate(sample):
-                    session.add(
+                    session.merge(
                         A(
                             exec_id=self._exec_id,
                             result_id=self._result_id,
@@ -287,7 +290,7 @@ class Pfac2Loader:
             for ss, sample in enumerate(self._Bs):
                 for tt, time_point in enumerate(sample):
                     for component, abs in enumerate(time_point):
-                        session.add(
+                        session.merge(
                             Bs(
                                 runid=self._runids[ss],
                                 exec_id=self._exec_id,
@@ -319,87 +322,10 @@ class Pfac2Loader:
                         wavelength=wavelength,
                         value=component,
                     )
-                session.add(c)
+                session.merge(c)
             session.commit()
 
         logger.debug("C written to db..")
-
-    def _construct_component_tensors(
-        self, A: NDArray, Bs: list[NDArray], C: NDArray
-    ) -> list[NDArray]:
-        """
-        for the weights `A`, samplewise elution profiles `Bs` and spectral profile `C`
-        create a three mode tensor of each component slice of each sample. Thus accessing
-        the component mode will give you the image of that component for each sample.
-
-        - A the weight of each component in each sample with shape: (samples, components)
-        - Bs are a list of elution profiles of each component of each sample with shape:
-        samples, (elution points, components)
-        - C is the spectral profile of each component with shape (spectral points,
-        components)
-
-        :param A: The weights of the components per sample.
-        :type A: NDArray
-        :param Bs: The samplewise component elution profiles
-        :type Bs: list[NDArray]
-        :return: list of 3 mode tensors sample: (components, elution, spectral)
-        :rtype: list[NDArray]
-        """
-        # construct each component of each sample as a np arr
-
-        component_tensors = []
-        for sample_idx, B in enumerate(Bs):
-            tensor = np.einsum("ik,jk->kij", B * A[sample_idx], C)
-            component_tensors.append(tensor)
-
-        return [np.asarray(x) for x in component_tensors]
-
-    def _create_component_tensor_df(
-        self, slice: NDArray, sample_idx: int, component_idx: int
-    ) -> pl.DataFrame:
-        """
-        create a component specific slice for a given sample_idx and component_idx
-
-        :param slice: the component image
-        :type slice: NDArray
-        :param sample_idx: the sample index of the sample
-        :type sample_idx: int
-        :param component_idx: the component index of the component
-        :type component_idx: int
-        :raises ValueError: if duplicate labels exist in the normalised table
-        :return: a normalised component dataframe
-        :rtype: pl.DataFrame
-        """
-        df = (
-            pl.DataFrame(slice)
-            .with_row_index("elution_point")
-            .unpivot(
-                index=["sample", "component", "elution_point"],
-                variable_name="wavelength",
-                value_name="abs",
-            )
-            .with_columns(pl.col("wavelength").str.replace("column_", "").cast(int))
-            .sort(["sample", "component", "wavelength", "elution_point"])
-            .select(
-                [
-                    "sample",
-                    "component",
-                    "wavelength",
-                    "elution_point",
-                    "abs",
-                ]
-            )
-        )
-
-        dups = df.select(
-            "sample", "component", "wavelength", "elution_point"
-        ).is_duplicated()
-
-        if dups.any():
-            raise ValueError(
-                f"duplicate primary key entry detected in sample: {sample_idx}, component: {component_idx}:{df.filter(dups)}"
-            )
-        return df
 
     def _create_component_slices_table(self):
         """create a sample x component slices table, where each row is an observation in
@@ -429,7 +355,7 @@ class Pfac2Loader:
                                 abs=abs,
                             )
 
-                            session.add(slice_row)
+                            session.merge(slice_row)
             session.commit()
 
         logger.debug("component sliced added to db.")
@@ -503,7 +429,7 @@ class Pfac2Loader:
             """
 
         insert_into_sample_recons = f"""--sql
-        insert into {SampleRecons.__tablename__}
+        insert or replace into {SampleRecons.__tablename__}
             select
                 exec_id,
                 result_id,
@@ -516,12 +442,19 @@ class Pfac2Loader:
         """
 
         with self._engine.connect() as conn:
-            conn.begin()
+            try:
+                conn.begin()
 
-            conn.execute(text(create_piv_tbl))
-            conn.execute(text(create_recon_tbl))
-            conn.execute(text(insert_into_sample_recons))
-            conn.commit()
+                conn.execute(text(create_piv_tbl))
+                conn.execute(text(create_recon_tbl))
+                conn.execute(text(insert_into_sample_recons))
+            except:
+                conn.rollback()
+                conn.close()
+                raise
+            else:
+                conn.commit()
+                conn.close()
 
     def _load_input_images(self, imgs: XX):
         """
@@ -930,22 +863,6 @@ class Parafac2Results:
 
         return app
 
-
-def apply_projections(
-    parafac2tensor: Parafac2Tensor,
-) -> tuple[NDArray, list[NDArray], NDArray]:
-    """
-    apply the tensorly `apply_parafac2_projections` to scale the Bs
-
-    :param parafac2tensor: result of PARAFAC2 decomposition
-    :type parafac2tensor: Parafac2Tensor
-    :return: A, B slices and C
-    :rtype: tuple[NDArray, list[NDArray], NDArray]
-    """
-    weights, (A, B, C), projections = parafac2tensor
-    _, (_, Bs, _) = apply_parafac2_projections((weights, (A, B, C), projections))
-
-    return A, Bs, C
 
 
 def _proof_that_my_computations_match_tly(

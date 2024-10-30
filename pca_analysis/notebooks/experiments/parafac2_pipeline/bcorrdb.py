@@ -111,7 +111,7 @@ class BCorrLoader:
         with Session(self._engine) as session:
             result_name = ResultNames(exec_id=self._exec_id, result_id=self._result_id)
 
-            session.add(result_name)
+            session.merge(result_name)
             session.commit()
 
         logger.debug("inserted result name into result_ids")
@@ -119,7 +119,7 @@ class BCorrLoader:
     def load_results(
         self,
         runids: list[str],
-        wavelength_labels: list[str],
+        wavelength_labels: list[int],
         exec_id: str,
         corrected: list[NDArray],
         baselines: list[NDArray],
@@ -152,7 +152,7 @@ class BCorrLoader:
                             abs=abs,
                         )
 
-                        session.add(bcorr)
+                        session.merge(bcorr)
 
             for ss, sample in enumerate(self.baselines):
                 for tt, time_point in enumerate(sample):
@@ -167,7 +167,7 @@ class BCorrLoader:
                             abs=abs,
                         )
 
-                        session.add(bcorr)
+                        session.merge(bcorr)
             session.commit()
 
         logger.debug(("baseline correction table written."))

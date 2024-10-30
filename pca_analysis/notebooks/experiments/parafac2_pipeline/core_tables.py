@@ -57,68 +57,47 @@ class ResultNames(ParafacResultsBase):
     exec_id: Mapped[str] = mapped_column(ForeignKey("exec_id.exec_id"))
 
 
-class CoreTablesDB:
-    def __init__(self, engine: Engine):
-        """wrapper around the core tables of the results db, providing IO for those tables"""
+def load_core_tables(engine, exec_id, runids):
+    # need to modify this to either only create the core tables OR called somewhere else
 
-        self._engine = engine
+    _create_exec_id_tbl(engine, exec_id)
+    _create_runid_tbl(engine, runids)
+    _create_result_id_tbl(engine)
 
-    def get_loader(self, exec_id, runids):
-        return CoreTableLoader(exec_id=exec_id, runids=runids, engine=self._engine)
-
-    # def clear_tables(self):
-    #     """delete all rows of core tables 'exec_id', 'results_id' and 'samples'."""
-
-    #     for table in CoreTbls:
-    #         self._conn.execute(f"truncate {table}")
+    logger.debug("core tables loaded.")
 
 
-class CoreTableLoader:
-    def __init__(
-        self,
-        exec_id: str,
-        runids: pl.DataFrame,
-        engine: Engine,
-    ):
-        """loads the core tables that other loaders depend on"""
-        self._exec_id = exec_id
-        self._engine = engine
+def _create_runid_tbl(engine, runids):
+    """create the runid table"""
 
-        self._runids = runids
+    ParafacResultsBase.metadata.create_all(engine, tables=[RunIDs.__table__])
 
-    def load_core_tables(self):
-        # need to modify this to either only create the core tables OR called somewhere else
+    with Session(engine) as session:
+        for runid in runids:
+            session.merge(RunIDs(runid=runid))
+        session.commit()
 
-        self._create_exec_id_tbl()
-        self._create_runid_tbl()
-        self.create_result_id_tbl()
 
-        logger.debug("core tables loaded.")
+def _create_exec_id_tbl(engine, exec_id):
+    """creates a exec_id table containing the exec_ids"""
 
-    def _create_runid_tbl(self):
-        """create the runid table"""
+    ParafacResultsBase.metadata.create_all(engine, tables=[ExecID.__table__])
 
-        ParafacResultsBase.metadata.create_all(self._engine, tables=[RunIDs.__table__])
-
-        with Session(self._engine) as session:
-            for runid in self._runids:
-                session.add(RunIDs(runid=runid))
+    with Session(engine) as session:
+        try:
+            entered = ExecID(exec_id=exec_id)
+            session.merge(entered)
+        except Exception:
+            session.rollback()
+            session.close()
+            raise
+        else:
             session.commit()
 
-    def _create_exec_id_tbl(self):
-        """creates a exec_id table containing the exec_ids"""
+    logger.debug("entered exec_id..")
 
-        ParafacResultsBase.metadata.create_all(self._engine, tables=[ExecID.__table__])
 
-        with Session(self._engine) as session:
-            entered = ExecID(exec_id=self._exec_id)
-            session.add(entered)
-            session.commit()
-        logger.debug("entered exec_id..")
+def _create_result_id_tbl(engine):
+    """create an empty result_id table containing the identifier for each result type"""
 
-    def create_result_id_tbl(self):
-        """create an empty result_id table containing the identifier for each result type"""
-
-        ParafacResultsBase.metadata.create_all(
-            self._engine, tables=[ResultNames.__table__]
-        )
+    ParafacResultsBase.metadata.create_all(engine, tables=[ResultNames.__table__])

@@ -2,10 +2,11 @@ from database_etl.etl.etl_pipeline_raw import get_data
 import duckdb as db
 from collections import UserList
 import polars as pl
+from pathlib import Path
 
 
 class InputDataGetter(UserList):
-    def __init__(self, conn: db.DuckDBPyConnection, ids: list[str]):
+    def __init__(self, input_db_path: str | Path, ids: list[str]):
         """a wrapper around the list data container for validation. Essentially wraps
         database_etl's `get_data`
 
@@ -13,11 +14,13 @@ class InputDataGetter(UserList):
         """
 
         self.data: list
-        self._conn = conn
+        self._db_path = input_db_path
         self.ids = ids
 
     def get_data_as_list_of_tuples(self):
-        result = get_data(output="tuple", con=self._conn, runids=self.ids)
+        with db.connect(self._db_path) as conn:
+            result = get_data(output="tuple", con=conn, runids=self.ids)
+            conn.close()
 
         if isinstance(result, list):
             self.data = result
