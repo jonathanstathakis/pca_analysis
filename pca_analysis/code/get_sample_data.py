@@ -1,11 +1,7 @@
 import duckdb as db
 from database_etl import get_data
 
-
-def get_ids_by_varietal(varietal: str, con: db.DuckDBPyConnection):
-    return (
-        con.execute(
-            """--sql
+by_varietal_query = """--sql
             select
                 inc_chm.runid
             from
@@ -19,7 +15,13 @@ def get_ids_by_varietal(varietal: str, con: db.DuckDBPyConnection):
             using
                 (vintage, wine)
             where varietal = ?
-    """,
+    """
+
+
+def get_ids_by_varietal(varietal: str, con: db.DuckDBPyConnection):
+    return (
+        con.execute(
+            by_varietal_query,
             parameters=[varietal],
         )
         .pl()["runid"]
