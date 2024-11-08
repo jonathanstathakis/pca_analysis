@@ -124,6 +124,10 @@ class Data:
         self._idx_col: str = "idx"
         self.mta = pl.DataFrame()
         self._loaded: bool = False
+
+        self._time_tbl: pl.DataFrame
+        self._scalar_tbl: pl.DataFrame
+        self._nm_tbl: pl.DataFrame
         # get some stats about the imgs table for process validation
 
         # mins range
@@ -357,7 +361,34 @@ class Data:
             self._runid_col, self._nm_col, self._time_col
         )
 
+        current_runids = self._nm_tbl.get_column("runid").unique().sort()
+        remaining_runids = _data._nm_tbl.get_column("runid").unique().sort()
+
+        if not set(current_runids) == set(remaining_runids):
+            # remove samples from other tables based on whether
+            _data.mta = _data.mta.filter(pl.col("runid").is_in(remaining_runids))
+            _data._time_tbl = _data._time_tbl.filter(
+                pl.col("runid").is_in(remaining_runids)
+            )
+            _data._scalar_tbl = _data._scalar_tbl.filter(
+                pl.col("runid").is_in(remaining_runids)
+            )
+
         return _data
+
+    def plot_2d_facet(self, wavelength, title="", facet_col_wrap):
+        """plot a samplewise faceting of the data at the given `wavelength` with optional `title` and number of columns `facet_col_wrap`.
+        """
+        import plotly.express as px
+
+        return self._nm_tbl.filter(pl.col("nm") == wavelength).pipe(
+            px.line,
+            x="mins",
+            y="abs",
+            facet_col="runid",
+            facet_col_wrap=facet_col_wrap,
+            title=title,
+        )
 
 
 def _normalise_imgs(df: pl.DataFrame) -> pl.DataFrame:
