@@ -39,6 +39,43 @@ class XX(UserList):
             X.drop(DCols.RUNID).to_numpy(writable=True) for X in X_dict.values()
         ]
 
+    def as_list_numpy_arrays(self):
+        """return the data as a list of numpy arrays"""
+
+        return self.data
+
+    def as_3_mode_tensor(self):
+        """return the data as a 3 way tensor with shape samples x elution x spectrum"""
+        import numpy as np
+
+        tensor = np.stack(self.data)
+
+        return tensor
+
+    def as_unfolded_samplewise(self):
+        """returns X as a 2 mode tensor unfolded samplewise"""
+        tensor = self.as_3_mode_tensor()
+
+        num_samples = tensor.shape[0]
+        num_timepoints = tensor.shape[1]
+        unfolded_row_count = num_samples * num_timepoints
+
+        unfolded = tensor.reshape(unfolded_row_count, 106)
+
+        return unfolded
+
+    def to_mat(self, path) -> None:
+        """output the tensor as a matlab dataset at `path`"""
+
+        from pathlib import Path
+
+        path_ = Path(path)
+        from scipy.io import savemat
+
+        savemat(path, {"X": self.data})
+
+        print(f"X saved to {path_.resolve()}")
+
 
 class Data:
     def __init__(
