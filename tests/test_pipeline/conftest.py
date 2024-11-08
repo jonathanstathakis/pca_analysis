@@ -38,7 +38,7 @@ def input_data(
     test_sample_ids,
 ) -> InputDataGetter:
     """the test sample data collection object"""
-    return InputDataGetter(conn=datacon, ids=test_sample_ids)
+    return InputDataGetter(input_db_path=datacon, ids=test_sample_ids)
 
 
 @pytest.fixture(scope="module")
