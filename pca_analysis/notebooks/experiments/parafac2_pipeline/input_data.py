@@ -20,7 +20,6 @@ class InputDataGetter(UserList):
     def get_data_as_list_of_tuples(self):
         with db.connect(self._db_path) as conn:
             result = get_data(output="tuple", con=conn, runids=self.ids)
-            conn.close()
 
         if isinstance(result, list):
             self.data = result

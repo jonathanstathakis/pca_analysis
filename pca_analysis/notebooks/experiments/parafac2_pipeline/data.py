@@ -376,9 +376,8 @@ class Data:
 
         return _data
 
-    def plot_2d_facet(self, wavelength, title="", facet_col_wrap):
-        """plot a samplewise faceting of the data at the given `wavelength` with optional `title` and number of columns `facet_col_wrap`.
-        """
+    def plot_2d_facet(self, wavelength, facet_col_wrap, title=""):
+        """plot a samplewise faceting of the data at the given `wavelength` with optional `title` and number of columns `facet_col_wrap`."""
         import plotly.express as px
 
         return self._nm_tbl.filter(pl.col("nm") == wavelength).pipe(
@@ -393,8 +392,7 @@ class Data:
 
 def _normalise_imgs(df: pl.DataFrame) -> pl.DataFrame:
     """
-    Normalise a sample-wise unfolded image tensor table such that each column bar 'abs'
-    is an identifier, and each row is unique.
+    Normalise a sample-wise unfolded image tensor table such that each column bar 'abs' is an identifier, and each row is unique.
 
     Prepares the sample images for further normalisation into seperate tables, sql-like
 

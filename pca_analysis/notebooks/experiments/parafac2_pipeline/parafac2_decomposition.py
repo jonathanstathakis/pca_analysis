@@ -40,6 +40,7 @@ def get_data_run_pipeline(input_db_path, runids, filter_expr, parafac2_params={}
 
 def get_input_data(input_db_path, runids, filter_expr=None):
     raw_data_extractor = InputDataGetter(input_db_path=input_db_path, ids=runids)
+
     input_data = Data(
         time_col=str(DCols.TIME),
         runid_col=str(DCols.RUNID),
