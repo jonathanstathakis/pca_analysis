@@ -1,14 +1,9 @@
 from enum import StrEnum
-import duckdb as db
-import numpy as np
-import polars as pl
 import logging
-from sqlalchemy import create_engine, Integer, Sequence, text, Engine
+from sqlalchemy import Sequence
 from sqlalchemy.orm import mapped_column, Mapped, Session
 from .orm import ParafacResultsBase
 from sqlalchemy import ForeignKey
-from sqlalchemy.orm import relationship
-from typing import List
 
 logger = logging.getLogger(__name__)
 

@@ -1,15 +1,16 @@
 import pytest
-from pca_analysis.notebooks.experiments.parafac2_pipeline.orchestrator import (
+from pca_analysis.parafac2_pipeline.orchestrator import (
     Orchestrator,
 )
-from pca_analysis.notebooks.experiments.parafac2_pipeline.results_db import ResultsDB
+from pca_analysis.parafac2_pipeline.results_db import ResultsDB
 import polars as pl
 import duckdb as db
 from pathlib import Path
 import logging
 from sqlalchemy import create_engine
 from sqlalchemy import Engine
-from pca_analysis.notebooks.experiments.parafac2_pipeline.dashboard_extractor import DashboardExtractor
+from pca_analysis.parafac2_pipeline.dashboard_extractor import DashboardExtractor
+
 logger = logging.getLogger(__name__)
 
 
@@ -49,8 +50,3 @@ def pipeline_results(
 # @pytest.mark.xfail
 def test_pipeline_results(pipeline_results):
     assert pipeline_results
-
-def test_dashboard_extractor(pers_results_db_path: str):
-    extractor = DashboardExtractor(db_path=pers_results_db_path)
-    
-

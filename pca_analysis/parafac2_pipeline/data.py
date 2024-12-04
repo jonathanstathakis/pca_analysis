@@ -1,12 +1,12 @@
 import polars as pl
 from typing import Self
-from pca_analysis.notebooks.experiments.parafac2_pipeline.utility import plot_imgs
-from pca_analysis.notebooks.experiments.parafac2_pipeline.input_data import (
+from .utility import plot_imgs
+from .input_data import (
     InputDataGetter,
 )
 import plotly.graph_objects as go
 from collections import UserList
-from pca_analysis.notebooks.experiments.parafac2_pipeline.pipeline_defs import DCols
+from .pipeline_defs import DCols
 from copy import deepcopy
 
 
@@ -376,7 +376,7 @@ class Data:
 
         return _data
 
-    def plot_2d_facet(self, wavelength, facet_col_wrap, title=""):
+    def plot_2d_facet(self, wavelength, facet_col_wrap, title="", template=None):
         """plot a samplewise faceting of the data at the given `wavelength` with optional `title` and number of columns `facet_col_wrap`."""
         import plotly.express as px
 
@@ -387,6 +387,7 @@ class Data:
             facet_col="runid",
             facet_col_wrap=facet_col_wrap,
             title=title,
+            template=template,
         )
 
 

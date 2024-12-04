@@ -1,10 +1,10 @@
 import duckdb as db
 import pytest
 
-from pca_analysis.notebooks.experiments.parafac2_pipeline.orchestrator import (
+from pca_analysis.parafac2_pipeline.orchestrator import (
     Orchestrator,
 )
-from pca_analysis.notebooks.experiments.parafac2_pipeline.results_db import ResultsDB
+from pca_analysis.parafac2_pipeline.results_db import ResultsDB
 
 
 def test_orc_load_data(orc_loaded: Orchestrator):

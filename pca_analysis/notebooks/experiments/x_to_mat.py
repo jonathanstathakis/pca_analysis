@@ -5,9 +5,9 @@ import logging
 
 import duckdb as db
 
-from pca_analysis.code.get_sample_data import get_ids_by_varietal
+from pca_analysis.get_sample_data import get_ids_by_varietal
 from pca_analysis.definitions import DB_PATH_UV
-from pca_analysis.notebooks.experiments.parafac2_pipeline.parafac2_decomposition import (
+from pca_analysis.parafac2_pipeline.parafac2_decomposition import (
     get_input_data,
 )
 

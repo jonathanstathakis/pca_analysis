@@ -1,20 +1,18 @@
 import logging
 from pathlib import Path
 
-import polars as pl
 
-from pca_analysis.notebooks.experiments.parafac2_pipeline.data import Data
-from pca_analysis.notebooks.experiments.parafac2_pipeline.input_data import (
+from .data import Data
+from .input_data import (
     InputDataGetter,
 )
-from pca_analysis.notebooks.experiments.parafac2_pipeline.pipeline import (
+from .pipeline import (
     create_pipeline,
 )
-from pca_analysis.notebooks.experiments.parafac2_pipeline.pipeline_defs import DCols
-from tests.test_definitions import TEST_DB_PATH
+from .pipeline_defs import DCols
 from pca_analysis.definitions import ROOT
 
-from pca_analysis.notebooks.experiments.parafac2_pipeline.parafac2postprocessing import (
+from .parafac2postprocessing import (
     Parafac2PostProcessor,
 )
 

@@ -1,19 +1,12 @@
 """in a reversal of the original design paradigm, I am not going to load the image data
 into the db. The reason for this is that I am restricted in how much logic I can put
-into python, and the storage of state in python objects due to the nature of Dash. Hence,
-I/O with a database is the best course of action. How do I load it though? First use the
-opportunity to define some ORMs, then for the runids in 'inc_chm', iterate over the parquets
-and read them into the db.
+into python, and the storage of state in python objects due to the nature of Dash.
+Hence, I/O with a database is the best course of action. How do I load it though? First use the opportunity to define some ORMs, then for the runids in 'inc_chm', iterate over the parquets and read them into the db.
 """
 
 # from sqlalchemy.base import Base
 from sqlalchemy.orm import Session
-
-from database_etl.etl.etl_pipeline_raw import fetch_imgs
-from pca_analysis.notebooks.experiments.parafac2_pipeline.orm import Images
-from tests.test_definitions import TEST_DB_PATH
-import duckdb as db
-import duckdb_engine
+from .database_etl_orm import Images
 import polars as pl
 
 from sqlalchemy.orm import declarative_base
@@ -23,7 +16,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 Base = declarative_base()
-# print(TEST_DB_PATH)
+
 engine = create_engine("duckdb:///tests/test_raw_db.db")
 
 logging.basicConfig(level="INFO")

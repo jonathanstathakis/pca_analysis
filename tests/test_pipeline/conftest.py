@@ -2,26 +2,26 @@ import pytest
 import duckdb as db
 from tests.test_definitions import TEST_DB_PATH
 import polars as pl
-from pca_analysis.notebooks.experiments.parafac2_pipeline.data import Data, XX
-from pca_analysis.notebooks.experiments.parafac2_pipeline.input_data import (
+from pca_analysis.parafac2_pipeline.data import Data, XX
+from pca_analysis.parafac2_pipeline.input_data import (
     InputDataGetter,
 )
-from pca_analysis.notebooks.experiments.parafac2_pipeline.orchestrator import (
+from pca_analysis.parafac2_pipeline.orchestrator import (
     DCols,
     Orchestrator,
 )
 from pathlib import Path
-from pca_analysis.notebooks.experiments.parafac2_pipeline.estimators import PARAFAC2
+from pca_analysis.parafac2_pipeline.estimators import PARAFAC2
 
-from pca_analysis.notebooks.experiments.parafac2_pipeline.parafac2db import (
+from pca_analysis.parafac2_pipeline.parafac2db import (
     Parafac2Results,
 )
-from pca_analysis.notebooks.experiments.parafac2_pipeline.parafac2db import (
+from pca_analysis.parafac2_pipeline.parafac2db import (
     Parafac2Tables,
 )
 from pathlib import Path
 
-from pca_analysis.notebooks.experiments.parafac2_pipeline.results_db import ResultsDB
+from pca_analysis.parafac2_pipeline.results_db import ResultsDB
 
 import logging
 from sqlalchemy import Engine, create_engine

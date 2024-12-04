@@ -1,10 +1,4 @@
-from pca_analysis.notebooks.experiments.parafac2_pipeline.estimators import (
-    logger,
-)
-
-from .core_tables import CoreTbls
 from enum import StrEnum
-import duckdb as db
 import polars as pl
 from numpy.typing import NDArray
 from .core_tables import ResultNames
@@ -14,6 +8,9 @@ from .orm import ParafacResultsBase
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy import ForeignKey
 from sqlalchemy import Index
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class BcorrTbls(StrEnum):

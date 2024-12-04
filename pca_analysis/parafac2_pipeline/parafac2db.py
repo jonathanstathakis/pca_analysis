@@ -9,11 +9,10 @@ import plotly.graph_objects as go
 import polars as pl
 from numpy.typing import NDArray
 from sqlalchemy import Engine, ForeignKey, Sequence, text
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, Session, mapped_column
-from tensorly.parafac2_tensor import Parafac2Tensor, apply_parafac2_projections
+from tensorly.parafac2_tensor import Parafac2Tensor
 
-from .core_tables import CoreTbls, ResultNames
+from .core_tables import ResultNames
 from .data import XX
 from .orm import ParafacResultsBase
 from .utility import plot_imgs
@@ -125,9 +124,6 @@ class Parafac2Tables(StrEnum):
     COMPONENTS = "components"
     SAMPLE_COMPONENTS = "component_slics"
     SAMPLE_RECONS = "sample_recons"
-
-
-
 
 
 class Pfac2Loader:
@@ -862,7 +858,6 @@ class Parafac2Results:
         )
 
         return app
-
 
 
 def _proof_that_my_computations_match_tly(

@@ -1,9 +1,4 @@
-from pca_analysis.notebooks.experiments.parafac2_pipeline.bcorrdb import BCRCols
-from pca_analysis.notebooks.experiments.parafac2_pipeline.estimators import (
-    gen_row_col_coords,
-)
-
-
+from .bcorrdb import BCRCols
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go

@@ -1,19 +1,10 @@
-from pca_analysis.code.get_sample_data import get_ids_by_varietal
-from database_etl.etl.etl_pipeline_raw import get_data
-from pca_analysis.notebooks.experiments.parafac2_pipeline.input_data import (
-    InputDataGetter,
-)
-from pca_analysis.definitions import DB_PATH_UV
+from .get_sample_data import get_ids_by_varietal
+from .definitions import DB_PATH_UV
 import duckdb as db
 
-from pca_analysis.notebooks.experiments.parafac2_pipeline.parafac2_decomposition import (
-    get_input_data,
-)
 import polars as pl
 import xarray as xr
-import matplotlib.pyplot as plt
 from database_etl.etl.etl_pipeline_raw import (
-    smooth_numeric_col,
     get_sample_metadata,
     fetch_imgs,
 )
@@ -94,5 +85,5 @@ def shiraz_to_cdf(
     filtered_xr_arr.to_dataset(name="shiraz_dataset").to_netcdf(path=out_path)
 
 
-if __name__ == "__main__":w
+if __name__ == "__main__":
     shiraz_to_cdf()

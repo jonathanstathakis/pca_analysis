@@ -1,7 +1,6 @@
 import logging
 
 import numpy as np
-import plotly.graph_objects as go
 from pybaselines import Baseline
 from sklearn.base import BaseEstimator, TransformerMixin
 from tensorly.decomposition import parafac2 as tl_parafac2
