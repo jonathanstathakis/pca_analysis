@@ -4,7 +4,7 @@ import numpy as np
 from pybaselines import Baseline
 from sklearn.base import BaseEstimator, TransformerMixin
 from tensorly.decomposition import parafac2 as tl_parafac2
-
+import xarray as xr
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,8 @@ class PARAFAC2(TransformerMixin, BaseEstimator):
         linesearch: bool = True,
     ):
         """
-        TODO: docstring
+        implement tensorly's PARAFAC2 via sklearn transformer with convenience functions
+        for postprocessing.
         """
         self.rank = rank
         self.n_iter_max = n_iter_max
@@ -111,7 +112,6 @@ class PARAFAC2(TransformerMixin, BaseEstimator):
             svd=self.svd,
             normalize_factors=self.normalize_factors,
             tol=self.tol,
-            absolute_tol=self.absolute_tol,
             nn_modes=self.nn_modes,
             random_state=self.random_state,
             verbose=self.verbose,
@@ -120,7 +120,36 @@ class PARAFAC2(TransformerMixin, BaseEstimator):
             linesearch=self.linesearch,
         )
 
+        self.weights_ = self.decomp_[0]
+        self.A_ = self.decomp_[1][0]
+        self.B_pure_ = self.decomp_[1][1]
+        self.C_ = self.decomp_[1][2]
+        self.projections_ = self.decomp_[2]
+
+        from tensorly.parafac2_tensor import apply_parafac2_projections
+
+        # the function requires A, C and the weights and returns them without mutation
+        # thus only select the list of projected B (or 'evolving factors')
+        self.B_proj_ = apply_parafac2_projections(self.decomp_)[1][1]
+
         return self.decomp_
+
+    def parafac2_to_tensor(self):
+        """
+        return the model as a tensor
+        """
+        from tensorly.parafac2_tensor import parafac2_to_tensor
+
+        return parafac2_to_tensor(self.decomp_)
+
+    def parafac2_to_slices(self):
+        """
+        return the model as a list of slices
+        """
+
+        from tensorly.parafac2_tensor import parafac2_to_slices
+
+        return parafac2_to_slices(self.decomp_)
 
     def _more_tags(self):
         # This is a quick example to show the tags API:\
@@ -129,8 +158,46 @@ class PARAFAC2(TransformerMixin, BaseEstimator):
         # the parameters. Thus, it is stateless.
         return {"stateless": True}
 
+    def get_sample_component_tensors(self, as_xarr: bool = False, input_coords=None):
+        """Get each component image of the model in a variety of data formats.
 
-class BCorr_ASLS(TransformerMixin, BaseEstimator):
+        By default it returns a list of 4 mode tensors in order i, r, j, k where r is
+        the model rank and also the number of components. The first mode i is a list
+        and the remaining three modes make up the axes of each list element's numpy
+        array.
+
+        You also have the option of returning the tensor as an xarray DataArray with
+        each mode represented in the order given above. Furthermore you can optionally
+        provide the input datasets coordinate values to label each mode. The component
+        mode labels are generated from the rank argument given in the PARAFAC2 init.
+        """
+        from .parafac2postprocessing import _construct_sample_component_tensors
+
+        components = _construct_sample_component_tensors(
+            A=self.A_, Bs=self.B_proj_, C=self.C_
+        )
+
+        # dim 1 is samples, dim 2 is rank, dim3 is time, dim 4 is spectra.
+
+        if as_xarr:
+            full_tensor = np.stack(components)
+            if input_coords:
+                rank_labels = [int(x) for x in range(self.rank)]
+                new_order = list(input_coords.dims)
+                new_order.insert(1, "component")
+
+                new_coords = input_coords.assign({"component": rank_labels})[new_order]
+
+                xr_components = xr.DataArray(data=full_tensor, coords=new_coords)
+            else:
+                xr_components = xr.DataArray(data=full_tensor)
+
+            return xr_components
+
+        return components
+
+
+class BCorr_ARPLS(TransformerMixin, BaseEstimator):
     """
     See <https://github.com/scikit-learn-contrib/project-template/blob/main/skltemplate/_template.py#L227>
 
@@ -223,7 +290,10 @@ class BCorr_ASLS(TransformerMixin, BaseEstimator):
         return self
 
     def transform(self, X):
-        """ """
+        """subtracts the baseline of a sample x wavelength x time tensor by iterating
+        fisrt over the samples then wavelengths before subtracting the baseline of each
+        selected 1D array then pasting them back together.
+        """
         # Since this is a stateless transformer, we should not call `check_is_fitted`.
         # Common test will check for this particularly.
 
@@ -232,9 +302,10 @@ class BCorr_ASLS(TransformerMixin, BaseEstimator):
         # `feature_names_in_` but only check that the shape is consistent.
         # X = self._validate_data(X, accept_sparse=True, reset=False)
 
-        # compute the baseliens
+        # compute the baseline
         self.slice_wavelength_params = []
         X_blines = []
+
         for slice in X:
             wavelength_blines = []
             wavelength_params = []

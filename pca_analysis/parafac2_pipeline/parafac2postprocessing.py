@@ -10,15 +10,15 @@ logger = logging.getLogger(__name__)
 
 
 class Parafac2PostProcessor:
-    def __init__(self, decomp):
+    def __init__(self, decomp: Parafac2Tensor):
         self.A, self.Bs, self.C = apply_projections(decomp)
-        self.n_components = self.A.shape[1]
-        self.n_samples = self.A.shape[0]
-        self.n_time_points = self.Bs[0].shape[0]
-        self.n_wavelengths = self.C.shape[0]
+        self.n_components: int = self.A.shape[1]
+        self.n_samples: int = self.A.shape[0]
+        self.n_time_points: int = self.Bs[0].shape[0]
+        self.n_wavelengths: int = self.C.shape[0]
 
     def get_component_tensors(self):
-        return _construct_component_tensors(A=self.A, Bs=self.Bs, C=self.C)
+        return _construct_sample_component_tensors(A=self.A, Bs=self.Bs, C=self.C)
 
     def get_component_tensor_df(self):
         dfs = []
@@ -91,7 +91,7 @@ def _create_component_tensor_df(
     return df
 
 
-def _construct_component_tensors(
+def _construct_sample_component_tensors(
     A: NDArray, Bs: list[NDArray], C: NDArray
 ) -> list[NDArray]:
     """
@@ -104,6 +104,9 @@ def _construct_component_tensors(
     samples, (elution points, components)
     - C is the spectral profile of each component with shape (spectral points,
     components)
+
+    Returns a sample-wise list (i) of 3 mode tensors (r, j, k). For a 
+    spectro-chromatographic dataset that would be samples x component x time x spectra.
 
     :param A: The weights of the components per sample.
     :type A: NDArray

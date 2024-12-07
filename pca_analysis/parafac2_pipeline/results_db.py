@@ -1,4 +1,4 @@
-from .estimators import BCorr_ASLS, PARAFAC2
+from .estimators import BCorr_ARPLS, PARAFAC2
 from .bcorrdb import BCorrDB
 from .pipeline import PipeSteps
 import logging
@@ -27,7 +27,7 @@ def load_new_results(
         steps = [PipeSteps.BCORR, PipeSteps.PARAFAC2]
 
     if str(PipeSteps.BCORR) in steps:
-        bcorr_est: BCorr_ASLS = pipeline.named_steps[PipeSteps.BCORR]
+        bcorr_est: BCorr_ARPLS = pipeline.named_steps[PipeSteps.BCORR]
 
         bcorrdb = BCorrDB(engine=engine)
         bc_loader = bcorrdb.get_loader()
