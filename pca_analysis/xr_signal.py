@@ -41,6 +41,7 @@ PEAKS_ARRAY_DESC = "detected peaks"
 def find_peaks_array(
     da: xr.DataArray,
     grouper: list[str],
+    x_key: str,
     find_peaks_kws: dict = find_peaks_defaults,
 ) -> xr.Dataset:
     """
@@ -62,7 +63,7 @@ def find_peaks_array(
         signal = v.squeeze()
         peak_idxs, props_ = sp_find_peaks(signal, **find_peaks_kws)
 
-        peak_xr = v.isel(time=peak_idxs)
+        peak_xr = v.isel(**{f"{x_key}": peak_idxs})
         peak_xr.assign_attrs({f"{PROPS_PREFIX}_{k}": props_})
         peak_xr.name = PEAKS_XARRAY_NAME
         peaks.append(peak_xr)
@@ -196,15 +197,15 @@ def find_peaks_dataset(
     ds: xr.Dataset,
     array_key: str,
     grouper: list[str],
+    x_key: str,
     find_peaks_kws: dict = find_peaks_defaults,
     return_viz: bool = True,
-    x: str = "",
     y: str = "",
     col_wrap: int = 1,
     fig_kwargs={},
     lines_kwargs={},
     peaks_kwargs={},
-):
+) -> xr.Dataset | tuple[xr.Dataset, go.Figure]:
     """apply find peaks to a DataArray of `ds`, assign the resulting peaks DataArray
     back and optionally provide a viz of the peaks overlaying the signals faceted by
     `grouper`.
@@ -223,22 +224,18 @@ def find_peaks_dataset(
     """
 
     peaks = find_peaks_array(
-        da=ds[array_key],
-        grouper=grouper,
-        find_peaks_kws=find_peaks_kws,
+        da=ds[array_key], grouper=grouper, find_peaks_kws=find_peaks_kws, x_key=x_key
     )
 
     ds = ds.merge(peaks)
 
     if return_viz:
-        if not x:
-            raise ValueError("please provide a valid accessor for 'x'")
         fig = facet_plot_signal_peaks(
             ds=ds,
             grouper=grouper,
             line_key=array_key,
             marker_key=PEAKS_XARRAY_NAME,
-            x=x,
+            x=x_key,
             y=y,
             col_wrap=col_wrap,
             fig_kwargs=fig_kwargs,
