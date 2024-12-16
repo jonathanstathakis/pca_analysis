@@ -33,7 +33,7 @@ find_peaks_defaults = dict(
     plateau_size=None,
 )
 
-PEAKS_XARRAY_NAME = "peaks"
+NEW_ARR_NAME = "peaks"
 PROPS_PREFIX = "props"
 PEAKS_ARRAY_DESC = "detected peaks"
 
@@ -65,7 +65,7 @@ def find_peaks_array(
 
         peak_xr = v.isel(**{f"{x_key}": peak_idxs})
         peak_xr.assign_attrs({f"{PROPS_PREFIX}_{k}": props_})
-        peak_xr.name = PEAKS_XARRAY_NAME
+        peak_xr.name = NEW_ARR_NAME
         peaks.append(peak_xr)
 
     peaks_ = xr.merge(peaks).assign_attrs(
@@ -75,21 +75,17 @@ def find_peaks_array(
     return peaks_
 
 
-def facet_plot_signal_peaks(
+def facet_plot_multiple_traces(
     ds: xr.Dataset,
     grouper: list[str],
-    line_key: str,
-    marker_key: str,
-    x: str,
-    y: str,
+    data_keys: list[str],
+    x_key: str = "",
     col_wrap: int = 1,
     fig_kwargs={},
-    lines_kwargs={},
-    peaks_kwargs={},
-):
-    """Facet plotting of two xarray Datasets, where one is best represented as lines and
-    the other as markers. Developed for overlaying chromatographic peak maxima over the
-    input signal.
+    trace_kwargs: list[dict] = [{}],
+) -> go.Figure:
+    """Facet plotting of xarray DataArrays in a dataset. Developed for overlaying
+    chromatographic peak maxima over the input signal.
 
     Iterates over the dataset on `grouper`, accessing the DataArray data of each group
     to produce the plots.
@@ -100,88 +96,72 @@ def facet_plot_signal_peaks(
     ----------
 
     ds : xr.Dataset
-         a dataset containing two applicable `xr.DataArray`
+        a dataset containing two applicable `xr.DataArray`
     grouper  : list[str]
-               a list of strings representing distinct groups within the dataset.
-    line_key : str
-               the access key of the `xr.DataArray` pertaining to the line data.
-    marker_key : str
-                the access key of the `xr.DataArray` pertaining to the marker data.
+        a list of strings representing distinct groups within the dataset.
+    data_keys : list[str]
+        the labels of each data array to plot. The corresponding trace style
+        args are passed through `trace_kwargs` in the same order. For example if you
+        want to plot a facet of a scatter overlaying a line, set trace 1 to 'markers'
+        and trace 2 to 'line' (?) TODO verify.
     x : str
         the coordinate label to be used for the x axis.
     y : str
         the label to be used for the y axis (only used for labeling the axis, not
         accessing)
-    fig_kwargs: dict
-        optional kwargs to be passed to `plotly.subplots.make_subplots`
-    lines_kwargs: dict
-        optional kwargs to be passed to the `go.Scatter` init for the line traces.
-    peaks_kwargs: dict
-        optional kwargs to be passed to the `go.Scatter` init for the marker traces.
     col_wrap: int
         optional maximum number of columns in subplot grid before beginning a new row.
+    fig_kwargs: dict
+        optional kwargs to be passed to `plotly.subplots.make_subplots`
+    trace_kwargs: dict
+        optional kwargs to be passed to `plotly.go.Scatter' for the traces in the same
+        order as `data_keys`
     """
+
+    # trace_kwargs is kind of compulsory but to soften the learning curve set default
+    # mode to markers.
+    if not trace_kwargs:
+        trace_kwargs = [dict(mode="markers")] * len(data_keys)
     groups = ds.groupby(grouper)
     n_plots = len(groups)
     n_rows = int(np.ceil(n_plots / col_wrap))
+
+    fig_kwargs["x_title"] = x_key
 
     fig = make_subplots(
         rows=n_rows,
         cols=col_wrap,
         subplot_titles=list(str(x) for x in dict(groups).keys()),
-        x_title=x,
-        y_title=y,
         **fig_kwargs,
     )
-
-    line_color = dict(color="blue")
-    peak_color = dict(color="red")
-    legendgroup_lines = "line"
-    legendgroup_peaks = "peaks"
 
     curr_col = 1
     curr_row = 1
 
+    # unpacking the dict consumes it. need to copy
+    trace_kwargs_ = trace_kwargs.copy()
+
     for idx, (k, v) in enumerate(groups):
-        # signal
-        line_y = v[line_key].squeeze()
-        line_x = v[line_key].coords[x]
-        line_name = v[line_key].name
+        for data_key, trace_kwargs__ in zip(data_keys, trace_kwargs_):
+            # signal
+            line_y = v[data_key].squeeze()
+            line_x = v[data_key].coords[x_key]
+            trace_name = v[data_key].name
 
-        if idx == 0:
-            showlegend = True
-        else:
-            showlegend = False
-        trace = go.Scatter(
-            x=line_x,
-            y=line_y,
-            mode="lines",
-            name=line_name,
-            marker=line_color,
-            showlegend=showlegend,
-            legendgroup=legendgroup_lines,
-            **lines_kwargs,
-        )
+            if idx == 0:
+                showlegend = True
+            else:
+                showlegend = False
+            trace = go.Scatter(
+                x=line_x,
+                y=line_y,
+                name=trace_name,
+                showlegend=showlegend,
+                legendgroup=str(data_key),
+                **trace_kwargs__,
+            )
 
-        fig.add_trace(trace, row=curr_row, col=curr_col)
-
-        # peaks
-        peak_y = v[marker_key].squeeze()
-        peak_x = line_x
-        peaks_name = v[marker_key].name
-
-        trace = go.Scatter(
-            x=peak_x,
-            y=peak_y,
-            name=peaks_name,
-            mode="markers",
-            marker=peak_color,
-            showlegend=showlegend,
-            legendgroup=legendgroup_peaks,
-            **peaks_kwargs,
-        )
-
-        fig.add_trace(trace, row=curr_row, col=curr_col)
+            fig.add_trace(trace, row=curr_row, col=curr_col)
 
         # reset cols and move to next row if max col reached.
         if curr_col == col_wrap:
@@ -199,13 +179,9 @@ def find_peaks_dataset(
     grouper: list[str],
     x_key: str,
     find_peaks_kws: dict = find_peaks_defaults,
-    return_viz: bool = True,
-    y: str = "",
-    col_wrap: int = 1,
-    fig_kwargs={},
-    lines_kwargs={},
-    peaks_kwargs={},
-) -> xr.Dataset | tuple[xr.Dataset, go.Figure]:
+    new_arr_name: str = NEW_ARR_NAME,
+    return_viz: bool = False,
+) -> xr.Dataset:
     """apply find peaks to a DataArray of `ds`, assign the resulting peaks DataArray
     back and optionally provide a viz of the peaks overlaying the signals faceted by
     `grouper`.
@@ -214,8 +190,7 @@ def find_peaks_dataset(
     plot on distinct `grouper` alongside the modified Dataset,
     otherwise it will only return the Dataset.
 
-    This is a convenience function to combine the calculation
-    and viz in one call.
+    This is a convenience function to combine the calculation and viz in one call.
 
     Parameters
     ----------
@@ -227,22 +202,13 @@ def find_peaks_dataset(
         da=ds[array_key], grouper=grouper, find_peaks_kws=find_peaks_kws, x_key=x_key
     )
 
+    if new_arr_name != NEW_ARR_NAME:
+        peaks = peaks.rename({NEW_ARR_NAME: new_arr_name})
     ds = ds.merge(peaks)
 
     if return_viz:
-        fig = facet_plot_signal_peaks(
-            ds=ds,
-            grouper=grouper,
-            line_key=array_key,
-            marker_key=PEAKS_XARRAY_NAME,
-            x=x_key,
-            y=y,
-            col_wrap=col_wrap,
-            fig_kwargs=fig_kwargs,
-            lines_kwargs=lines_kwargs,
-            peaks_kwargs=peaks_kwargs,
+        raise RuntimeError(
+            "return_viz is deprecated, instead call facet_plot_multiple_traces directly"
         )
 
-        return ds, fig
-    else:
-        return ds
+    return ds

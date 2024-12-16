@@ -87,15 +87,27 @@ def comp_slices_to_xr(parafac2_ds: xr.Dataset) -> xr.DataArray:
     return comp_slice_xr
 
 
-def compute_reconstruction(components: xr.DataArray) -> xr.DataArray:
+def compute_reconstruction_from_slices(components: xr.DataArray) -> xr.DataArray:
+    """
+    Compute the PARAFAC2 reconstruction from individual component slices. Requires the
+    components to be indexed along the second mode for the sum to be correct.
+
+    Parameters
+    ==========
+
+    components: xr.DataArray
+        a 3 mode array of the component slices with the slices as the 2nd mode.
+    """
+
     recon_data = np.einsum("irjk->ijk", components)
 
-    recon_xr = xr.DataArray(
-        data=recon_data,
-        coords={
-            k: v for k, v in dict(components.coords).items() if k != COMPONENT_LABEL
-        },
-    )
+    dim_coords = list(components.dims)
+    dim_coords.remove(COMPONENT_LABEL)
+
+    input_coords = components.coords
+    coords = {k: v for k, v in dict(input_coords).items() if k in dim_coords}
+
+    recon_xr = xr.DataArray(data=recon_data, coords=coords)
 
     return recon_xr
 
@@ -119,6 +131,6 @@ def parafac2_pipeline(
 
     ds = ds.assign(components=comp_slices_to_xr(parafac2_ds=parafac2_ds))
 
-    ds = ds.assign(recon=compute_reconstruction(components=ds.components))
+    ds = ds.assign(recon=compute_reconstruction_from_slices(components=ds.components))
 
     return ds

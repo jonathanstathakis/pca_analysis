@@ -41,6 +41,11 @@ nbmake = "^1.5.4"
 database-etl = {path = "../database_etl", develop = true}
 pytest-xdist = "^3.6.1"
 nbstripout = "^0.8.1"
+bottleneck = "^1.4.2"
+hvplot = "^0.11.1"
+jupyter-bokeh = "^4.0.5"
+darkdetect = "^0.8.0"
+tensorly-viz = "^0.1.7"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
