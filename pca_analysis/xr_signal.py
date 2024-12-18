@@ -77,12 +77,12 @@ def find_peaks_array(
 
 def facet_plot_multiple_traces(
     ds: xr.Dataset,
-    grouper: list[str],
-    data_keys: list[str],
-    x_key: str = "",
+    grouper=None,
+    var_keys=None,
+    x_key=None,
     col_wrap: int = 1,
     fig_kwargs={},
-    trace_kwargs: list[dict] = [{}],
+    trace_kwargs: dict = {},
 ) -> go.Figure:
     """Facet plotting of xarray DataArrays in a dataset. Developed for overlaying
     chromatographic peak maxima over the input signal.
@@ -99,7 +99,7 @@ def facet_plot_multiple_traces(
         a dataset containing two applicable `xr.DataArray`
     grouper  : list[str]
         a list of strings representing distinct groups within the dataset.
-    data_keys : list[str]
+    var_keys : list[str]
         the labels of each data array to plot. The corresponding trace style
         args are passed through `trace_kwargs` in the same order. For example if you
         want to plot a facet of a scatter overlaying a line, set trace 1 to 'markers'
@@ -114,14 +114,16 @@ def facet_plot_multiple_traces(
     fig_kwargs: dict
         optional kwargs to be passed to `plotly.subplots.make_subplots`
     trace_kwargs: dict
-        optional kwargs to be passed to `plotly.go.Scatter' for the traces in the same
-        order as `data_keys`
+        optional kwargs to be passed to `plotly.go.Scatter' for the trace. keys must be the same as in `var_keys`.
     """
 
     # trace_kwargs is kind of compulsory but to soften the learning curve set default
     # mode to markers.
-    if not trace_kwargs:
-        trace_kwargs = [dict(mode="markers")] * len(data_keys)
+    # if var_keys isnt provided, plot them all
+
+    if not var_keys:
+        var_keys = list(ds.keys())
+
     groups = ds.groupby(grouper)
     n_plots = len(groups)
     n_rows = int(np.ceil(n_plots / col_wrap))
@@ -141,24 +143,42 @@ def facet_plot_multiple_traces(
     # unpacking the dict consumes it. need to copy
     trace_kwargs_ = trace_kwargs.copy()
 
-    for idx, (k, v) in enumerate(groups):
-        for data_key, trace_kwargs__ in zip(data_keys, trace_kwargs_):
-            # signal
-            line_y = v[data_key].squeeze()
-            line_x = v[data_key].coords[x_key]
-            trace_name = v[data_key].name
+    import plotly.express as px
 
-            if idx == 0:
+    colormap = px.colors.qualitative.Plotly[: len(var_keys)]
+
+    for grp_idx, (grp_key, grp) in enumerate(groups):
+        for var_key, color in zip(var_keys, colormap):
+            # signal
+            y = grp[var_key].squeeze()
+            x = grp[var_key].coords[x_key]
+
+            if x.ndim != 1:
+                raise ValueError(f"{x.ndim=}. input ds as follows: {ds.sizes}")
+            if y.ndim != 1:
+                raise ValueError(f"{y.ndim=}. input ds as follows: {ds.sizes}")
+            trace_name = grp[var_key].name
+
+            if grp_idx == 0:
                 showlegend = True
             else:
                 showlegend = False
+
+            # trace kwargs are optional but need to unpack a dict
+            # to satisfy the go.Scatter call below
+            if trace_kwargs.get(var_key):
+                trace_kwargs_ = trace_kwargs[var_key]
+            else:
+                trace_kwargs_ = {}
+
             trace = go.Scatter(
-                x=line_x,
-                y=line_y,
+                x=x,
+                y=y,
                 name=trace_name,
                 showlegend=showlegend,
-                legendgroup=str(data_key),
-                **trace_kwargs__,
+                legendgroup=str(var_key),
+                marker=dict(color=color),
+                **trace_kwargs_,
             )
 
             fig.add_trace(trace, row=curr_row, col=curr_col)
