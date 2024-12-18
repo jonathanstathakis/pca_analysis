@@ -1,6 +1,4 @@
 """
-TODO establish this with a peak table generation function.
-
 In chromatography, a peak table generally consists of the time location of the maxima, the left and right bounds, the width and the area.
 
 `scipy.signal` provides functions for obtaining the location, height, width, prominence, left and right base of detected peaks. Other parameters can be derived from these fundamental ones.
@@ -90,7 +88,7 @@ def plot_peaks(
     """
     Draw the input signal overlaid with the peaks present in peak table
 
-    TODO4 test
+    TODO test
 
     Parameters
     ----------

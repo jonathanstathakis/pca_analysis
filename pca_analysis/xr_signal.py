@@ -11,8 +11,8 @@ Otherwise `find_peaks_array` can be used to find the peaks in a xr.DataArray, an
 `facet_plot_signal_peaks` can be used to overlay the peaks on the input signal if
 the input signal and peaks are combined into a Dataset.
 
-TODO describe constants in docs.
-TODO test whether the overriding works.
+TODO4 describe constants in docs.
+TODO4 test whether the overriding works.
 """
 
 from scipy.signal import find_peaks as sp_find_peaks
@@ -52,8 +52,8 @@ def find_peaks_array(
     Cells without peaks are left nan.
 
     TESTME
-    TODO document me
-    TODO check that the props are being handled as expected. Expect a nested mapping
+    TODO4 document me
+    TODO4 check that the props are being handled as expected. Expect a nested mapping
     for each group.
     """
 
@@ -194,7 +194,7 @@ def find_peaks_dataset(
 
     Parameters
     ----------
-    TODO describe parameters
+    TODO4 describe parameters
     TESTME
     """
 

@@ -9,8 +9,6 @@ class InputDataGetter(UserList):
     def __init__(self, input_db_path: str | Path, ids: list[str]):
         """a wrapper around the list data container for validation. Essentially wraps
         database_etl's `get_data`
-
-        TODO: add validation
         """
 
         self.data: list

@@ -14,7 +14,7 @@ class PARAFAC2(TransformerMixin, BaseEstimator):
     See <https://github.com/scikit-learn-contrib/project-template/blob/main/skltemplate/_template.py#L227>
 
 
-    TODO: docstring
+    TODO4: docstring
     """
 
     # This is a dictionary allowing to define the type of parameters.
@@ -202,7 +202,7 @@ class BCorr_ARPLS(TransformerMixin, BaseEstimator):
     See <https://github.com/scikit-learn-contrib/project-template/blob/main/skltemplate/_template.py#L227>
 
 
-    TODO: docstring
+    TODO4: docstring
 
     Notes
     -----
@@ -347,7 +347,7 @@ class BCorr_SNIP(TransformerMixin, BaseEstimator):
     See <https://github.com/scikit-learn-contrib/project-template/blob/main/skltemplate/_template.py#L227>
 
 
-    TODO: docstring
+    TODO4: docstring
 
     Notes
     -----

@@ -4,7 +4,7 @@ decompositions.
 
 tensor dim labels are preset 'COORD1_LABEL' etc. To modify, assign to the corresponding constant.
 
-TESTME
+TODO4 test
 """
 
 from tensorly.decomposition import parafac2
