@@ -151,10 +151,12 @@ def facet_plot_multiple_traces(
         for var_key, color in zip(var_keys, colormap):
             # signal
             y = grp[var_key].squeeze()
-            x = grp[var_key].coords[x_key]
 
-            if x.ndim != 1:
-                raise ValueError(f"{x.ndim=}. input ds as follows: {ds.sizes}")
+            x = grp[var_key].coords.get(x_key)
+
+            if x:
+                if x.ndim != 1:
+                    raise ValueError(f"{x.ndim=}. input ds as follows: {ds.sizes}")
             if y.ndim != 1:
                 raise ValueError(f"{y.ndim=}. input ds as follows: {ds.sizes}")
             trace_name = grp[var_key].name
