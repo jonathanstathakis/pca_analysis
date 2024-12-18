@@ -30,3 +30,32 @@ def snip_xr(
 def apply_snip(x, **kwargs):
     result, _ = snip(x, **kwargs)
     return result
+
+
+def snip_ds(ds: xr.Dataset, core_dim, **kwargs):
+    """
+    Correct baseline over all samples and wavelengths, adding the baseline
+    and corrected signal as variables to the dataset.
+
+    Hardcoded keys
+    """
+
+    if not isinstance(ds, xr.Dataset):
+        raise TypeError
+
+    ds = ds.assign(
+        baselines=xr.apply_ufunc(
+            apply_snip,
+            ds.raw_data,
+            kwargs=kwargs,
+            input_core_dims=[
+                [core_dim],
+            ],
+            output_core_dims=[[core_dim]],
+            # need vectorize to do the looping
+            vectorize=True,
+        )
+    )
+    ds = ds.assign(data_corr=ds.raw_data - ds.baselines)
+
+    return ds
