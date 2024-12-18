@@ -1,6 +1,3 @@
-# TODO fine tune clustering to goup the first 5 peaks together
-# TODO write tests for 'clustering_by_maxima' module.
-
 """
 Notes
 =====
@@ -17,6 +14,10 @@ library consists of the following:
 """
 
 
+def pipeline():
+    """
+    smoothing, sharpening, baseline correction, peak picking, peak clustering.
 
-
-
+    TODO define
+    """
+    ...
