@@ -63,3 +63,8 @@ class PlotlyAccessorDA:
 
         df = self._da.to_dataframe().reset_index()
         return px.line(df, x=x, y=y, **kwargs)
+    
+    def smooth(self, **kwargs):
+        from pca_analysis.preprocessing import smooth
+
+        smooth.savgol_smooth(self._da)
