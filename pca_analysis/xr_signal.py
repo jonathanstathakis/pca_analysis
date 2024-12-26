@@ -154,7 +154,7 @@ def facet_plot_multiple_traces(
 
             x = grp[var_key].coords.get(x_key)
 
-            if x:
+            if x is not None:
                 if x.ndim != 1:
                     raise ValueError(f"{x.ndim=}. input ds as follows: {ds.sizes}")
             if y.ndim != 1:
