@@ -1,11 +1,43 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
+from copy import deepcopy
+
+
+class MyPCA:
+    def __init__(self):
+        self.pca = PCA()
+
+    def run_pca(self, data):
+        obj = deepcopy(self)
+        obj.pca = PCA()
+
+        obj.pca.fit_transform(data)
+
+        return obj
+
+    def scree_plot(self, display_percentage_cutoff=1e-3, exp_var_change_prop=0.01):
+        if not hasattr(self, "pca"):
+            raise RuntimeError("call `run_pca` first")
+
+        pca_scree_plot(
+            explained_variance=self.pca.explained_variance_,
+            display_percentage_cutoff=display_percentage_cutoff,
+            exp_var_change_prop=exp_var_change_prop,
+        )
 
 
 def pca_scree_plot(
-    explained_variance, display_percentage_cutoff=1e-3, sig_component_cutoff=0.01
+    explained_variance, display_percentage_cutoff=1e-3, exp_var_change_prop=0.01
 ):
+    """
+    draw a bar scree plot of the explained variance vs number of components.
+    Additionally, adds a line indicating the number of components at which the change
+    in explained variance does not exceed a user-defined proportion of change, given
+    as `exp_var_change_prop`.
+    """
     # implementation taken from <https://www.jcchouinard.com/pca-scree-plot/>
 
     # scale the cusmsum to between 0 and 1 to make calculations easier
@@ -19,9 +51,9 @@ def pca_scree_plot(
     # is greater than 2% of the maximum.
 
     sig_component_idxs = np.where(
-        diff > norm_cumsum_exp_var.max() * sig_component_cutoff
+        diff > norm_cumsum_exp_var.max() * exp_var_change_prop
     )
-    sig_component_cutoff = sig_component_idxs[0][-1]
+    exp_var_change_prop = sig_component_idxs[0][-1]
 
     plt.bar(
         range(1, len(explained_variance) + 1),
@@ -36,7 +68,7 @@ def pca_scree_plot(
     )
 
     plt.vlines(
-        sig_component_cutoff,
+        exp_var_change_prop,
         plt.ylim()[0],
         plt.ylim()[1],
         linestyles="dashed",
@@ -63,6 +95,6 @@ def pca_scree_plot(
     plt.xlim(xlim_start, xlim_end)
 
     print(
-        f"the number of significant components determined to be {sig_component_cutoff}"
+        f"the number of significant components determined to be {exp_var_change_prop}"
     )
-    return sig_component_cutoff
+    return exp_var_change_prop
