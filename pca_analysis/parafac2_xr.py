@@ -105,27 +105,39 @@ def compute_reconstruction_from_slices(components: xr.DataArray) -> xr.DataArray
     dim_coords.remove(COMPONENT_LABEL)
 
     input_coords = components.coords
-    coords = {k: v for k, v in dict(input_coords).items() if k in dim_coords}
 
+    # remove COMPONENT_LABEL from coords while retaining order of input data
+    coords = {k: input_coords[k] for k in dim_coords}
     recon_xr = xr.DataArray(data=recon_data, coords=coords)
 
     return recon_xr
 
 
 def parafac2_pipeline(
-    input_data: xr.DataArray, rank: int, parafac2_args={}
+    input_data: xr.DataArray, rank: int, **parafac2_args
 ) -> xr.Dataset:
     """compute a PARAFAC2 decomposition on an xr.DataArray. returning an xr.Dataset with the model tensors, component slices and reconstruction as variables"""
 
-    _decomp, err = parafac2(
+    decomp, err = parafac2(
         tensor_slices=input_data.to_numpy(), rank=rank, **parafac2_args
     )
 
+    ds = decomp_results_as_xr(input_data=input_data, rank=rank, decomp=decomp)
+
+    return ds
+
+
+def decomp_results_as_xr(input_data: xr.DataArray, rank: int, decomp: Parafac2Tensor):
     parafac2_ds = decomp_as_xr(
         input_data=input_data,
         rank=rank,
-        decomp=_decomp,
+        decomp=decomp,
     )
+    """
+    combine various PARAFAC2 results into an XArray Dataset.
+
+    Returns the input data, A, Bs, C, components and the reconstruction.
+    """
 
     ds = xr.merge([input_data.rename("input_data"), parafac2_ds])
 
