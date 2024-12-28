@@ -44,7 +44,7 @@ from scipy import signal
 import pandas as pd
 
 
-def tablulate_peaks_2D(
+def tablulate_peaks_1D(
     x, find_peaks_kwargs=dict(), peak_widths_kwargs=dict(rel_height=0.95)
 ):
     """
@@ -52,11 +52,13 @@ def tablulate_peaks_2D(
 
     TODO4 test
 
+    TODO decide how to model the peak information within an xarray context. options are either to return a pandas dataframe, a data array, or label the input array.
+
     Parameters
     ----------
 
     x: Any
-        A 2D signal containing peaks.
+        A 1D signal containing peaks.
     find_peaks_kwargs: dict
         kwargs for `scipy.signal.find_peaks`
     peak_widths_kwargs: dict

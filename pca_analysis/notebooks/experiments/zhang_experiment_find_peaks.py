@@ -1,5 +1,7 @@
 from scipy import signal
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+import numpy as np
+from pca_analysis import xr_plotly
 
 
 class FindPeaks:
@@ -13,8 +15,16 @@ class FindPeaks:
         return self
 
     def plot_peaks(self, sample):
-        sample.plot.line()
-        plt.scatter(self.peaks_x, self.peaks_y)
-        plt.xlim(0, 25)
+        line = go.Scatter(x=sample["time"], y=sample.data.squeeze(), name=sample.name)
+        labels = np.arange(1, len(self.peaks_x) + 1)
+        peaks = go.Scatter(
+            x=self.peaks_x,
+            y=self.peaks_y,
+            text=labels,
+            marker=dict(color="red"),
+            mode="markers+text",
+            name="peaks",
+            textposition="top center",
+        )
 
-        return self
+        return go.Figure().add_traces([line, peaks])

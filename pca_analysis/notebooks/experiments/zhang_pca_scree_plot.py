@@ -1,29 +1,18 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA as skPCA
 import matplotlib.pyplot as plt
 from copy import deepcopy
 
 
-class MyPCA:
-    def __init__(self):
-        self.pca = PCA()
-
-    def run_pca(self, data):
-        obj = deepcopy(self)
-        obj.pca = PCA()
-
-        obj.pca.fit_transform(data)
-
-        return obj
-
+class PCA(skPCA):
     def scree_plot(self, display_percentage_cutoff=1e-3, exp_var_change_prop=0.01):
-        if not hasattr(self, "pca"):
-            raise RuntimeError("call `run_pca` first")
+        if not hasattr(self, "explained_variance_"):
+            raise RuntimeError("call `fit_transform` first")
 
         pca_scree_plot(
-            explained_variance=self.pca.explained_variance_,
+            explained_variance=self.explained_variance_,
             display_percentage_cutoff=display_percentage_cutoff,
             exp_var_change_prop=exp_var_change_prop,
         )
@@ -37,6 +26,7 @@ def pca_scree_plot(
     Additionally, adds a line indicating the number of components at which the change
     in explained variance does not exceed a user-defined proportion of change, given
     as `exp_var_change_prop`.
+
     """
     # implementation taken from <https://www.jcchouinard.com/pca-scree-plot/>
 
@@ -55,46 +45,37 @@ def pca_scree_plot(
     )
     exp_var_change_prop = sig_component_idxs[0][-1]
 
-    plt.bar(
-        range(1, len(explained_variance) + 1),
-        explained_variance,
+    import plotly.graph_objects as go
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=list(range(1, len(explained_variance) + 1)),
+            y=explained_variance,
+            line=dict(color="red"),
+            name="Cumulative Explained Variance",
+        )
     )
 
-    plt.plot(
-        range(1, len(explained_variance) + 1),
-        cumsum_exp_var,
-        c="red",
-        label="Cumulative Explained Variance",
+    fig.add_annotation(
+        x=exp_var_change_prop,
+        y=explained_variance[exp_var_change_prop],
+        text=str(exp_var_change_prop),
+    )
+    fig.add_vline(
+        exp_var_change_prop, line=dict(dash="dash"), name="signif. comp. cutoff"
     )
 
-    plt.vlines(
-        exp_var_change_prop,
-        plt.ylim()[0],
-        plt.ylim()[1],
-        linestyles="dashed",
-        colors="black",
-        label="signif. comp. cutoff",
+    fig.update_layout(
+        xaxis=dict(title="num. components", range=(0, 2 * exp_var_change_prop)),
+        yaxis=dict(title="Explained Variance (eigenvalues)"),
+        title="scree test for significant components",
     )
-
-    plt.xlabel("num. components")
-    plt.ylabel("Explained Variance (eigenvalues)")
-    plt.title("scree plot")
-
-    plt.legend(loc="center right", fontsize=8)
-    plt.tight_layout()
-
-    np.diff(explained_variance)
-
     # limit the plot to a range of points from 0 to 0.001% of the maximum y (explained variance)
-
-    cutoff = explained_variance.max() * display_percentage_cutoff
-    plot_x_lim = np.where(explained_variance > cutoff)[0]
-
-    xlim_start, xlim_end = plot_x_lim[0], plot_x_lim[-1]
-
-    plt.xlim(xlim_start, xlim_end)
 
     print(
         f"the number of significant components determined to be {exp_var_change_prop}"
     )
+    fig.show()
     return exp_var_change_prop

@@ -104,8 +104,14 @@ class PARAFAC2(TransformerMixin, BaseEstimator):
         # `feature_names_in_` but only check that the shape is consistent.
         # X = self._validate_data(X, accept_sparse=True, reset=False)
 
+        self.X = X
+
+        if isinstance(self.X, xr.DataArray):
+            self.X_xr = self.X
+            self.X = self.X.values
+
         self.decomp_, self.errors = tl_parafac2(
-            tensor_slices=X,
+            tensor_slices=self.X,
             rank=self.rank,
             n_iter_max=self.n_iter_max,
             init=self.init,
@@ -195,6 +201,15 @@ class PARAFAC2(TransformerMixin, BaseEstimator):
             return xr_components
 
         return components
+
+    def results_as_xr(self):
+        from pca_analysis.parafac2_xr import decomp_results_as_xr
+
+        if not hasattr(self, "X_xr"):
+            raise RuntimeError("input an xr.DataArray to return results as xr")
+        return decomp_results_as_xr(
+            input_data=self.X_xr, rank=self.rank, decomp=self.decomp_
+        )
 
 
 class BCorr_ARPLS(TransformerMixin, BaseEstimator):
