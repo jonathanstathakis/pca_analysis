@@ -46,6 +46,12 @@ hvplot = "^0.11.1"
 jupyter-bokeh = "^4.0.5"
 darkdetect = "^0.8.0"
 tensorly-viz = "^0.1.7"
+pooch = "^1.8.2"
+cftime = "^1.6.4.post1"
+nbdime = "^4.0.2"
+sklearn-xarray = "^0.4.0"
+netcdf4 = "^1.7.2"
+h5netcdf = "^1.4.1"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
