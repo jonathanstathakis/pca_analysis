@@ -176,3 +176,64 @@ def plot_peaks(
 
     fig = fig.update_layout(title=dict(text="peak mapping"))
     return fig
+
+
+def compute_dataarray_peak_table(
+    xa: xr.DataArray, core_dim=None, find_peaks_kwargs=dict(), peak_widths_kwargs=dict()
+) -> xr.DataArray:
+    import pandas as pd
+
+    if not isinstance(xa, xr.DataArray):
+        raise TypeError("expected DataArray")
+
+    peak_tables = []
+    group_cols = list(xa.sizes.keys())[:-1]
+
+    # if x is not an iterable, make it so, so we can iterate over it. This is because x
+    # can optionally be an iterable.
+
+    group_cols = [
+        x
+        for x in xa.sizes.keys()
+        if x not in (core_dim if isinstance(core_dim, list) else [core_dim])
+    ]
+
+    # for each group in grouper get the group label and group
+    for grp_label, group in xa.groupby(group_cols):
+        # generate the peak table for the current group
+        peak_table = tablulate_peaks_1D(
+            x=group.squeeze(),
+            find_peaks_kwargs=find_peaks_kwargs,
+            peak_widths_kwargs=peak_widths_kwargs,
+        )
+
+        # label each groups peak table with the group column name and values to provide
+        # identifying columns for downstream joining etc.
+        # works for multiple groups and single groups.
+        for idx, val in enumerate(
+            grp_label if isinstance(grp_label, tuple) else [grp_label]
+        ):
+            peak_table[group_cols[idx]] = val
+
+        # add the core dim column subset by the peak indexes
+        peak_table = peak_table.assign(
+            **{str(core_dim): group.mins[peak_table["p_idx"].values].values}
+        )
+
+        peak_table = peak_table.reset_index()
+        peak_tables.append(peak_table)
+
+    peak_table = pd.concat(peak_tables).melt(
+        id_vars=group_cols + [str(core_dim), "peak"],
+        var_name="property",
+    )
+    pt_da = (
+        peak_table.set_index(group_cols + [str(core_dim), "peak", "property"])
+        .to_xarray()
+        .to_dataarray(dim="value")
+        .drop_vars("value")
+        .squeeze()
+    )
+    pt_da.name = "peak_table"
+
+    return pt_da
