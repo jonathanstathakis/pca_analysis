@@ -187,7 +187,6 @@ def compute_dataarray_peak_table(
         raise TypeError("expected DataArray")
 
     peak_tables = []
-    group_cols = list(xa.sizes.keys())[:-1]
 
     # if x is not an iterable, make it so, so we can iterate over it. This is because x
     # can optionally be an iterable.
@@ -197,6 +196,17 @@ def compute_dataarray_peak_table(
         for x in xa.sizes.keys()
         if x not in (core_dim if isinstance(core_dim, list) else [core_dim])
     ]
+
+    # after the above operation, if group_cols is an empty list, then the input
+    # only contains one group.
+
+    pt_idx_cols = [str(core_dim), "peak", "property"]
+
+    if not group_cols:
+        xa = xa.expand_dims("grp")
+        group_cols = ["grp"]
+
+    pt_idx_cols += group_cols
 
     # for each group in grouper get the group label and group
     for grp_label, group in xa.groupby(group_cols):
@@ -217,18 +227,29 @@ def compute_dataarray_peak_table(
 
         # add the core dim column subset by the peak indexes
         peak_table = peak_table.assign(
-            **{str(core_dim): group.mins[peak_table["p_idx"].values].values}
+            mins=group.mins[peak_table["p_idx"].values].values
         )
 
         peak_table = peak_table.reset_index()
         peak_tables.append(peak_table)
 
-    peak_table = pd.concat(peak_tables).melt(
-        id_vars=group_cols + [str(core_dim), "peak"],
-        var_name="property",
-    )
+    peak_table = pd.concat(peak_tables)
+
+    # remove helper group label
+    if "grp" in pt_idx_cols:
+        pt_idx_cols.remove("grp")
+        peak_table = peak_table.drop("grp", axis=1)
+
+    var_name = "property"
+    id_vars = pt_idx_cols.copy()
+    id_vars.remove(var_name)
+
     pt_da = (
-        peak_table.set_index(group_cols + [str(core_dim), "peak", "property"])
+        peak_table.melt(
+            id_vars=id_vars,
+            var_name=var_name,
+        )
+        .set_index(pt_idx_cols)
         .to_xarray()
         .to_dataarray(dim="value")
         .drop_vars("value")
