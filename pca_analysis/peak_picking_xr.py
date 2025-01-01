@@ -14,7 +14,7 @@ class PeakPicking:
         """
         self._da = da
 
-    def tabulate_peaks_2D(
+    def tabulate_peaks_1D(
         self, find_peaks_kwargs=dict(), peak_widths_kwargs=dict(rel_height=0.95)
     ):
         """
