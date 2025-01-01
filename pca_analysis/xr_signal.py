@@ -77,7 +77,7 @@ def find_peaks_array(
 
 def facet_plot_multiple_traces(
     ds: xr.Dataset,
-    grouper=None,
+    facet_col=None,
     var_keys=None,
     x_key=None,
     col_wrap: int = 1,
@@ -124,7 +124,7 @@ def facet_plot_multiple_traces(
     if not var_keys:
         var_keys = list(ds.keys())
 
-    groups = ds.groupby(grouper)
+    groups = ds.groupby(facet_col)
     n_plots = len(groups)
     n_rows = int(np.ceil(n_plots / col_wrap))
 
