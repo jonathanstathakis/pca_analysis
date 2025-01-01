@@ -18,7 +18,7 @@ class PlotlyAccessorDS:
 
     def facet_plot_overlay(
         self,
-        grouper=None,
+        facet_col=None,
         var_keys=None,
         x_key=None,
         col_wrap: int = 1,
@@ -32,7 +32,7 @@ class PlotlyAccessorDS:
 
         return facet_plot_multiple_traces(
             ds=self._ds,
-            grouper=grouper,
+            facet_col=facet_col,
             var_keys=var_keys,
             x_key=x_key,
             col_wrap=col_wrap,
@@ -128,6 +128,9 @@ def heatmaps(
     x,
     n_cols,
 ):
+    """
+    TODO: fix multiple generation of color scale bar.
+    """
     grpby = da.groupby(z)
     n_traces = len(grpby.groups)
     n_rows = int(np.ceil(n_traces / n_cols))
@@ -135,9 +138,9 @@ def heatmaps(
     fig = make_subplots(
         rows=n_rows,
         cols=n_cols,
-        subplot_titles=list(grpby.groups.keys()),
+        subplot_titles=[str(x) for x in grpby.groups.keys()],
         x_title=x,
-        y_title=da.name,
+        y_title=y,
     )
 
     curr_row = 1
@@ -148,7 +151,7 @@ def heatmaps(
                 x=dim_1_da[x],
                 y=dim_1_da[y],
                 z=dim_1_da.data.squeeze(),
-                name=dim_1_label,
+                name=str(dim_1_label),
             ),
             row=curr_row,
             col=curr_col,
