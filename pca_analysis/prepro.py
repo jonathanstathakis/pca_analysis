@@ -28,7 +28,7 @@ class Preprocessor:
 def preprocess_pipe(da):
     return (
         da.pipe(_rank_id)
-        .pipe(_rename_images_to_raw_data)
+        .pipe(_rename_images_to_input_data)
         .pipe(_correct_wavelength_datatype)
         .transpose("id_rank", "wavelength", "mins")
     )
@@ -45,8 +45,8 @@ def _rank_id(da):
     return da_
 
 
-def _rename_images_to_raw_data(da):
-    return da.rename("raw_data")
+def _rename_images_to_input_data(da):
+    return da.rename("input_data")
 
 
 def _correct_wavelength_datatype(da):
