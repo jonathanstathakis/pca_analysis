@@ -1,38 +1,84 @@
 import numpy as np
-from pybaselines.smooth import snip
+from pybaselines.smooth import snip as pysnip
 import xarray as xr
 
 
 def snip_xr(
     ds: xr.Dataset,
-    **kwargs,
+    var: str,
+    max_half_window=None,
+    decreasing=False,
+    smooth_half_window=None,
+    filter_order: int = 2,
+    x_data: str = "",
+    **pad_kwargs,
 ):
     """
     apply SNIP to an input data array
 
     docs: https://pybaselines.readthedocs.io/en/latest/api/pybaselines/smooth/index.html
 
+    TODO change to `apply_ufunc`
     """
     blines = []
-    for x in ds["raw_data"]:
-        bline, _ = snip(x, **kwargs)
+    for x in ds[var]:
+        bline, _ = pysnip(
+            x,
+            max_half_window=max_half_window,
+            decreasing=decreasing,
+            smooth_half_window=smooth_half_window,
+            filter_order=filter_order,
+            x_data=ds[x_data],
+            pad_kwargs=pad_kwargs,
+        )
         blines.append(bline)
 
     blines_ = np.stack(blines)
-    blines_ds = ds["raw_data"].copy(data=blines_)
+    blines_ds = ds[var].copy(data=blines_)
     blines_ds.name = "baselines"
 
     ds_ = xr.merge([ds, blines_ds])
-    ds_ = ds_.assign(data_corr=lambda x: x["raw_data"] - x["baselines"])
+    ds_ = ds_.assign(data_corr=lambda x: x[var] - x["baselines"])
     return ds_
 
 
 def apply_snip(x, **kwargs):
-    result, _ = snip(x, **kwargs)
+    result, _ = pysnip(x, **kwargs)
     return result
 
 
-def snip_ds(ds: xr.Dataset, core_dim, **kwargs):
+from sklearn_xarray.preprocessing import Resampler, BaseTransformer
+
+
+class SNIP(BaseTransformer):
+    def __init__(
+        self,
+        core_dim,
+        max_half_window=None,
+        decreasing: bool = False,
+        smooth_half_window=None,
+        filter_order: int = 2,
+        x_data=None,
+        **pad_kwargs,
+    ):
+        self.core_dim = core_dim
+        self.max_half_window = max_half_window
+        self.decreasing = decreasing
+        self.smooth_half_window = smooth_half_window
+        self.filter_order = filter_order
+        self.x_data = x_data
+        self.pad_kwargs = pad_kwargs
+
+    def fit(self, X, y=None, **fit_params):
+        super(SNIP, self).fit(X, y, **fit_params)
+        return self
+
+    def transform(self, X, y=None):
+        self.Xt, self.baselines_ = snip(da=X, core_dim=self.core_dim)
+        return self.Xt
+
+
+def snip(da: xr.DataArray, core_dim, **kwargs):
     """
     Correct baseline over all samples and wavelengths, adding the baseline
     and corrected signal as variables to the dataset.
@@ -40,22 +86,20 @@ def snip_ds(ds: xr.Dataset, core_dim, **kwargs):
     Hardcoded keys
     """
 
-    if not isinstance(ds, xr.Dataset):
+    if not isinstance(da, xr.DataArray):
         raise TypeError
 
-    ds = ds.assign(
-        baselines=xr.apply_ufunc(
-            apply_snip,
-            ds.raw_data,
-            kwargs=kwargs,
-            input_core_dims=[
-                [core_dim],
-            ],
-            output_core_dims=[[core_dim]],
-            # need vectorize to do the looping
-            vectorize=True,
-        )
+    baselines = xr.apply_ufunc(
+        apply_snip,
+        da,
+        kwargs=kwargs,
+        input_core_dims=[
+            [core_dim],
+        ],
+        output_core_dims=[[core_dim]],
+        # need vectorize to do the looping
+        vectorize=True,
     )
-    ds = ds.assign(data_corr=ds.raw_data - ds.baselines)
 
-    return ds
+    dcorr = da - baselines
+    return dcorr, baselines
