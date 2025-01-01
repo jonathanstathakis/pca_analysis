@@ -161,5 +161,18 @@ def plot_peaks(
                 ),
             )
 
+        # mark the maxima
+        fig.add_trace(
+            go.Scatter(
+                x=[row["p_idx"]],
+                y=[row["maxima"]],
+                mode="markers",
+                name="maxima",
+                marker=dict(color=color[1], size=3),
+                legendgroup=idx,
+                legendgrouptitle_text=idx,
+            )
+        )
+
     fig = fig.update_layout(title=dict(text="peak mapping"))
     return fig
