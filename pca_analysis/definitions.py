@@ -20,7 +20,7 @@ CT_PW = str(Path(os.getenv("CELLAR_TRACKER_PW")))
 
 DB_PATH_UV = UV_DATA_DIR / "raw_uv.db"
 
-NC_RAW = UV_DATA_DIR / "raw_uv.nc"
+SHIRAZ_TESTSET = UV_DATA_DIR / "raw_uv.nc"
 
 # test dataset netcdf for development of PARAFAC2 pipeline
 
