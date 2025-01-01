@@ -1,3 +1,60 @@
+# Dev Notes
+
+## Dev Dependencies
+
+This project uses nbstripout as a git attributes filter to avoid commiting content.
+
+## Project Structure
+
+This project is built around an analysis pipeline for the decomposition of chromatospectral images into their individual chemical species. The core data structure is the xarray Dataset/DataTree (Datatree is WIP) which will store the state change. The actions will be performed by a sklearn Pipeline with a wrapper to adapt it for xarray types. The main goal is to develop a set of preprocessing parameters to optimise the decomposition. Thus an interactive parameter selection interface is required, to identify the sharpening, smoothing, baseline correction and partitioning parameters. These parameters are then passed to the `Pipeline` to perform either a direct decomposition or serve as the basis of a cross-validated grid search. The parameters will be stored in dicts and unpacked into the Transformer initialisation. Thus, the program structure is as follows:
+
+1. [ ] Loading the Input Data
+    1. [ ] Observation of the data
+        1. [ ] statistics
+        2. [ ] visualisations
+            1. [ ] heatmaps
+            2. [ ] Curve overlays
+    2. [ ] Preprprocessing and parameter selection
+        1. [ ] smoothing
+            1. [ ] line plot widget
+            2. [ ] store parameters
+        2. sharpening
+            1. [ ] line plot widget
+            2. [ ] store parameters
+        3. [ ] (more of 1. and 2.?)
+            1. [ ] line plot widget
+            2. [ ] store parameters
+        4. [ ] baseline correction
+            1. [ ] line plot widget
+            2. [ ] store parameters
+        5. [ ] partitioning
+            1. [ ] partitioning line plot widget
+            2. [ ] store parameters
+        6. [ ] rank estimation by partition
+            1. [ ] PCA
+                1. [ ] standard scaling (optional)
+                2. [ ] PCA
+                3. [ ] Viz
+                4. [ ] store result
+            2. [ ] CORCONDIA
+                1. [ ] Standard scaling (optional)
+                2. [ ] viz
+                3. [ ] store result.
+    3. [ ] PARAFAC2 Pipeline/grid search
+        1. [ ] run pipeline
+        2. [ ] viz factors
+        3. [ ] viz components as widget
+        4. [ ] viz components as overlay
+        5. [ ] viz recon. vs input.
+
+
+Note that we have had trouble producing single peak decompositions in complicated tensors
+and may need to either enforce maximum number of peaks per partition OR invoke some curve fitting
+OR secondary PARAFAC2. Also the PCA and CORCONDIA results appear to be somewhat random, possibly
+around a distribution, and this should be investigated. We also need to add decomposition metrics
+and more rank estimation methods. But this is enough to get going.
+
+
 # PCA_Analysis
 
 See [MOC](./docs/moc.md) for a description of the contents of this project.
