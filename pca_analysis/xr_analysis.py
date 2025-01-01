@@ -24,7 +24,7 @@ def get_peak_table_as_df(pt: xr.DataArray):
     return the peak table as a flattened, pivoted dataframe
     """
 
-    pt_ = _get_da_as_df(da=pt).unstack().droplevel(0, axis=1).reset_index().dropna()
+    pt_ = _get_da_as_df(da=pt).unstack().droplevel(0, axis=1).dropna().reset_index()
     return pt_
 
 
@@ -61,6 +61,12 @@ class AgiletteDS:
             # peak_outlines=False,
             # peak_width_calc=False,
         )
+
+    def peak_table_as_df(self):
+        """
+        Return the peak table as a flattened dataframe
+        """
+        return get_peak_table_as_df(self._ds.pt)
 
 
 @xr.register_dataarray_accessor("agt")
