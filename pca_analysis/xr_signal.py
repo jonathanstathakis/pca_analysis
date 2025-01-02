@@ -173,14 +173,20 @@ def facet_plot_multiple_traces(
             else:
                 trace_kwargs_ = {}
 
-            trace = go.Scatter(
-                x=x,
-                y=y,
+            # overwrite defaults with user inputs
+
+            default_kwargs = dict(
                 name=trace_name,
                 showlegend=showlegend,
                 legendgroup=str(var_key),
                 marker=dict(color=color),
-                **trace_kwargs_,
+            )
+
+            trace_kwargs__ = merge_nested_dicts(default_kwargs, trace_kwargs_)
+            trace = go.Scatter(
+                x=x,
+                y=y,
+                **trace_kwargs__,
             )
 
             fig.add_trace(trace, row=curr_row, col=curr_col)
@@ -234,3 +240,15 @@ def find_peaks_dataset(
         )
 
     return ds
+
+
+def merge_nested_dicts(defaults, inputs):
+    """
+    given default trace kwargs, replace the default values with user inputs if present.
+    """
+    for k, v in inputs.items():
+        if isinstance(v, dict) and k in defaults and isinstance(defaults[k], dict):
+            merge_nested_dicts(defaults[k], v)
+        else:
+            defaults[k] = v
+    return defaults
