@@ -7,6 +7,7 @@ from pca_analysis.get_sample_data import get_ids_by_varietal
 from pca_analysis.definitions import DB_PATH_UV
 from database_etl import get_data
 from xarray import Dataset
+from .prepro import preprocess_pipe
 
 
 def get_shiraz_dataset() -> Dataset:
@@ -18,4 +19,4 @@ def get_shiraz_dataset() -> Dataset:
         if not isinstance(ds, Dataset):
             raise TypeError
 
-    return ds.imgs.agt.preprocess().to_dataset()
+    return ds.imgs.pipe(preprocess_pipe).to_dataset()
