@@ -9,7 +9,6 @@ from dataclasses import dataclass
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import numpy as np
-from typing import Self
 
 
 @dataclass
@@ -171,79 +170,23 @@ class PinotNoir(AbstChrom):
             return result
 
 
-class Shiraz(AbstChrom):
-    def __init__(self, da: xr.DataArray):
-        """
-        Manager for DataArrays
-        """
-
-        assert isinstance(da, DataArray)
-
-        self._da = da
-
-    def copy(self):
-        """
-        make a copy of the internal DataTree, returning a new Cabernet object.
-        """
-
-        da = self._da.copy()
-
-        shz = Shiraz(da=da)
-
-        return shz
-
-    def sel(
-        self, indexers=None, method=None, tolerance=None, drop=False, **indexers_kwargs
-    ):
-        shz = self.copy()
-        shz._da = shz._da.sel(
-            indexers=indexers,
-            method=method,
-            tolerance=tolerance,
-            drop=drop,
-            **indexers_kwargs,
-        )
-        return shz
-
-    def isel(self, **kwargs):
-        shz = self.copy()
-
-        shz._da = shz._da.isel(**kwargs)
-        return shz
-
-    @property
-    def viz(self):
-        return VizShiraz(da=self._da)
-
-    def __getitem__(self, key):
-        result = self._da[key]
-
-        if isinstance(result, Dataset):
-            return Shiraz(da=result)
-        else:
-            return result
-
-    def __setitem__(self, key, data):
-        self._da[key] = data
-
-        return Shiraz(da=self._da)
-
-    def get(self, key, default=None):
-        result = self._da.__get__(name=key, default=default)
-        return result
-
-
 class VizShiraz(AbstChrom):
     x = 1
+
+    import plotly.io as pio
+
+    pio.templates.default = "seaborn"
 
     def __init__(self, da: DataArray):
         assert isinstance(da, DataArray)
         self._da = da
 
     def heatmap(self, n_cols: int = 1, trace_kwargs={}, fig_kwargs={}):
-        if self._da[self.SAMPLE].data.ndim == 0:
+        da_reshaped = self._da.transpose(self.TIME, self.SPECTRA, ...)
+
+        if da_reshaped.data.ndim == 2:
             fig = _heatmap(
-                da=self._da,
+                da=da_reshaped,
                 x=self.SPECTRA,
                 y=self.TIME,
                 trace_kwargs=trace_kwargs,
@@ -251,12 +194,12 @@ class VizShiraz(AbstChrom):
             )
 
             fig.update_layout(
-                title=dict(text=f"{self.SAMPLE}: {self._da[self.SAMPLE].data}")
+                title=dict(text=f"{self.SAMPLE}: {da_reshaped[self.SAMPLE].data}")
             )
 
-        else:
-            fig = _facet_heatmap(
-                da=self._da,
+        elif da_reshaped.data.ndim == 3:
+            fig = _heatmap_facet(
+                da=da_reshaped,
                 x=self.SPECTRA,
                 y=self.TIME,
                 facet_dim=self.SAMPLE,
@@ -264,6 +207,8 @@ class VizShiraz(AbstChrom):
                 fig_kwargs=fig_kwargs,
                 n_cols=n_cols,
             )
+        else:
+            raise ValueError("can only handle 2 or 3 dim data")
 
         return fig
 
@@ -347,11 +292,77 @@ class VizShiraz(AbstChrom):
                 fig_kwargs=fig_kwargs,
                 n_cols=n_cols,
             )
-
-            fig.show()
         else:
             raise ValueError("can only handle 1, 2 or 3 dims.")
         return fig
+
+
+class Shiraz(AbstChrom):
+    def __init__(self, da: xr.DataArray):
+        """
+        Manager for DataArrays
+        """
+
+        assert isinstance(da, DataArray)
+
+        self._da = da
+
+    def copy(self):
+        """
+        make a copy of the internal DataTree, returning a new Cabernet object.
+        """
+
+        da = self._da.copy()
+
+        shz = Shiraz(da=da)
+
+        return shz
+
+    def sel(
+        self, indexers=None, method=None, tolerance=None, drop=False, **indexers_kwargs
+    ):
+        shz = self.copy()
+        shz._da = shz._da.sel(
+            indexers=indexers,
+            method=method,
+            tolerance=tolerance,
+            drop=drop,
+            **indexers_kwargs,
+        )
+        return shz
+
+    def isel(self, **kwargs):
+        shz = self.copy()
+
+        shz._da = shz._da.isel(**kwargs)
+        return shz
+
+    @property
+    def viz(self) -> VizShiraz:
+        return VizShiraz(da=self._da)
+
+    def __getitem__(self, key):
+        result = self._da[key]
+
+        if isinstance(result, Dataset):
+            return Shiraz(da=result)
+        else:
+            return result
+
+    def __setitem__(self, key, data):
+        self._da[key] = data
+
+        return Shiraz(da=self._da)
+
+    def get(self, key, default=None):
+        result = self._da.__get__(name=key, default=default)
+        return result
+
+    def __repr__(self):
+        return self._da.__repr__()
+
+    def _repr_html_(self):
+        return self._da._repr_html_()
 
 
 def _line_facet(
@@ -364,12 +375,9 @@ def _line_facet(
     n_cols: int = 1,
 ):
     """
-    Line faceting where one dim is displayed as the faceting, the second as plot overlays
-    and a third as the x axis of each plot.
+    Line faceting where one dim is displayed as the faceting, the second as plot overlays and a third as the x axis of each plot.
 
     TODO sort subplots lexographically or numerically according to label
-    TODO fix legend grouping to display 1 per `overlay_dim` value. We know this works.
-    See <https://plotly.com/python/legend/> subheadings "Grouped Legend Items"
     """
     from itertools import cycle
     import plotly.express.colors as colors
@@ -385,25 +393,11 @@ def _line_facet(
                 legendgroup=str(overlay_label),
                 name=str(overlay_label),
                 marker=dict(color=next(colormap)),
-                showlegend=True,
+                showlegend=False,
                 **trace_kwargs,
             )
         traces[str(facet_label)] = overlay_traces
 
-    fig = _build_line_subplots_fig(
-        traces=traces, n_cols=n_cols, x=x, da=da, fig_kwargs=fig_kwargs
-    )
-
-    return fig
-
-
-def _build_line_subplots_fig(
-    traces: dict[str, go.Trace],
-    n_cols: int,
-    x: str,
-    da: xr.DataArray,
-    fig_kwargs: dict = {},
-):
     n_traces = len(traces)
 
     # determine number of rows as the rounding up of the ratio of traces to columns
@@ -428,8 +422,10 @@ def _build_line_subplots_fig(
             curr_col = 1
             curr_row += 1
 
-    fig.update_layout(height=1000)
+    # only display legend of first plot.
+    fig.update_traces(patch=dict(showlegend=True), row=1, col=1)
 
+    fig.update_layout(height=1000, legend_title_text=str(overlay_dim))
     return fig
 
 
@@ -469,13 +465,20 @@ def _line(da: xr.DataArray, x: str, trace_kwargs, fig_kwargs):
 
 
 def _heatmap(da: xr.DataArray, x: str, y: str, trace_kwargs, fig_kwargs):
+    """
+    # TODO add x and y labels.
+    """
     fig = go.Figure(**fig_kwargs)
     trace = go.Heatmap(x=da[x], y=da[y], z=da.data.squeeze(), **trace_kwargs)
     fig.add_trace(trace)
+    fig.update_layout(
+        xaxis=go.layout.XAxis(title=go.layout.xaxis.Title(text=str(x))),
+        yaxis=go.layout.YAxis(title=go.layout.yaxis.Title(text=str(y))),
+    )
     return fig
 
 
-def _facet_heatmap(
+def _heatmap_facet(
     da: xr.DataArray,
     x: str,
     y: str,
@@ -486,6 +489,8 @@ def _facet_heatmap(
 ):
     """
     TODO: fix multiple generation of color scale bar.
+    TODO: integrate datashader <https://plotly.com/python/datashader/> for
+    handling large datasets.
     """
     grpby = da.groupby(facet_dim)
     n_traces = len(grpby.groups)
@@ -499,16 +504,16 @@ def _facet_heatmap(
         y_title=y,
         **fig_kwargs,
     )
-
     curr_row = 1
     curr_col = 1
     for dim_1_label, dim_1_da in grpby:
         fig.add_trace(
             trace=go.Heatmap(
-                x=dim_1_da[x],
-                y=dim_1_da[y],
+                x=dim_1_da[x].values,
+                y=dim_1_da[y].values,
                 z=dim_1_da.data.squeeze(),
                 name=str(dim_1_label),
+                coloraxis="coloraxis",
                 **trace_kwargs,
             ),
             row=curr_row,
@@ -519,6 +524,10 @@ def _facet_heatmap(
             curr_col = 1
             curr_row += 1
 
-    fig.update_layout(height=1000, title=f"heatmaps of {da.name} over '{facet_dim}'")
+    fig.update_layout(
+        height=1000,
+        title=f"heatmaps of {da.name} over '{facet_dim}'",
+        coloraxis=go.layout.Coloraxis(),
+    )
 
     return fig

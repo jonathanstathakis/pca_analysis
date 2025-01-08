@@ -18,4 +18,4 @@ def cab():
 
 @pytest.fixture
 def shz_input_data(cab: Cabernet):
-    return cab["input_data"]
+    return cab["input_data"].sel(mins=slice(0, 30), wavelength=slice(190, 400, 10))
