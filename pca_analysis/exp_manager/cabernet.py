@@ -21,9 +21,6 @@ class ChromDims:
         return len(self.__dict__.keys())
 
 
-chrom_dims = ChromDims()
-
-
 @dataclass
 class Names:
     """
@@ -33,7 +30,9 @@ class Names:
     CHROM = "input_data"
 
 
+chrom_dims = ChromDims()
 names = Names()
+CORE_DIM = chrom_dims.TIME
 
 
 class AbstChrom:
@@ -80,14 +79,14 @@ class Cabernet(AbstChrom):
         self._dt = xr.DataTree(dataset=xr.Dataset({da.name: da}))
 
     def sel(self, **kwargs):
+        self._dt = self._dt.sel(**kwargs)
         cab = self.copy()
-        cab = cab._dt.sel(**kwargs)
         return cab
 
     def isel(self, **kwargs):
+        self._dt = self._dt.isel(**kwargs)
         cab = self.copy()
 
-        cab._dt = cab._dt.isel(**kwargs)
         return cab
 
     def __getitem__(self, key):
@@ -124,8 +123,15 @@ class Cabernet(AbstChrom):
         """
         Assign `DataTree` or `DataArray` to internal `DataTree`.
         """
+        if items:
+            if any(isinstance(x, Cabernet) for x in items.values()):
+                items = {k: v._dt for k, v in items.items()}
+        if items_kwargs:
+            if any(isinstance(x, Cabernet) for x in items_kwargs.values()):
+                items_kwargs = {k: v._dt for k, v in items_kwargs.items()}
+        self._dt = self._dt.assign(items=items, **items_kwargs)
+
         cab = self.copy()
-        cab._dt = cab._dt.copy().assign(items=items, **items_kwargs)
 
         return cab
 
@@ -134,6 +140,21 @@ class Cabernet(AbstChrom):
 
     def _repr_html_(self):
         return self._dt._repr_html_()
+
+    def keys(self):
+        return self._dt.keys()
+
+    @property
+    def data_vars(self):
+        return self._dt.data_vars
+
+    @property
+    def attrs(self):
+        return self._dt.attrs
+
+    @property
+    def name(self):
+        return self._dt.name
 
 
 class PinotNoir(AbstChrom):
@@ -297,15 +318,52 @@ class VizShiraz(AbstChrom):
         return fig
 
 
+class BCorr:
+    def __init__(self, da: xr.DataArray):
+        """
+        baseline correction namespace.
+        """
+
+        self._da = da
+
+    def snip(self, **kwargs):
+        """
+        TODO: convert to a scikit learn transformer if poss to reduce redundancy.
+        """
+        from pca_analysis.preprocessing.bcorr import snip as _snip
+
+        ds = _snip(da=self._da, core_dim=CORE_DIM, **kwargs)
+
+        dt = DataTree(ds)
+        dt.name = "bcorred"
+        dt.attrs["data_model_type"] = "baseline corrected"
+        return Cabernet.from_tree(dt=dt)
+
+
+class Transform:
+    def __init__(self, da: xr.DataArray):
+        """
+        Shiraz transform operation namespace. transform the internal DataArray according
+        to some predefined function, returning a Dataset or DataArray.
+        """
+        self._da = da
+        self.bcorr = BCorr(da=self._da)
+
+
 class Shiraz(AbstChrom):
     def __init__(self, da: xr.DataArray):
         """
         Manager for DataArrays
+        TODO: add data model type specific transformer and visualiser classes and dispatcher.
         """
 
         assert isinstance(da, DataArray)
 
         self._da = da
+        self.trans = Transform(da=self._da)
+
+    def __len__(self):
+        return self._da.__len__()
 
     def copy(self):
         """
@@ -321,21 +379,28 @@ class Shiraz(AbstChrom):
     def sel(
         self, indexers=None, method=None, tolerance=None, drop=False, **indexers_kwargs
     ):
-        shz = self.copy()
-        shz._da = shz._da.sel(
+        self._da = self._da.sel(
             indexers=indexers,
             method=method,
             tolerance=tolerance,
             drop=drop,
             **indexers_kwargs,
         )
+        shz = self.copy()
         return shz
 
     def isel(self, **kwargs):
+        self._da = self._da.isel(**kwargs)
         shz = self.copy()
-
-        shz._da = shz._da.isel(**kwargs)
         return shz
+
+    @property
+    def shape(self):
+        return self._da.shape
+
+    @property
+    def attrs(self):
+        return self._da.attrs
 
     @property
     def viz(self) -> VizShiraz:

@@ -23,7 +23,18 @@ def test_shiraz_sel(shz_input_data: Shiraz):
     assert isinstance(shz, Shiraz), f"{type(shz)}"
 
 
-def test_shiraz_isel(shz_input_data: Shiraz):
+def test_shiraz_isel_does_subset(shz_input_data: Shiraz):
+    """
+    Test whether isel does subset internal data correctly
+    """
+
+    shz = shz_input_data.isel(sample=0)
+
+    assert shz
+    assert len(shz.shape) == 2
+
+
+def test_shiraz_isel_returns_shz(shz_input_data: Shiraz):
     """
     test whether Shiraz can be subset with isel and return a Shiraz obj.
     """
