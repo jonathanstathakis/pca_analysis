@@ -72,9 +72,7 @@ def clustering_by_maxima(
         ]
 
         # generate a peak plot for each sample
-        facet_peak_fig = ds.pipe(
-            xr_signal.facet_plot_multiple_traces, **facet_peak_plot_kwargs
-        )
+        facet_peak_fig = ds.pipe(xr_signal.plot_multiple_vars, **facet_peak_plot_kwargs)
 
         # figures to displayed in the final widget.
         figures.append(facet_peak_fig)
@@ -133,10 +131,10 @@ def _cluster_signal_peak_overlay(
     # add signal trace
     for idx, grp in (
         ds[signal_key]
-        .isel(id_rank=slice(None, None, 3))
+        .isel(sample=slice(None, None, 3))
         .to_dataframe()
         .reset_index()
-        .groupby("id_rank")
+        .groupby("sample")
     ):
         cluster_regions_fig.add_trace(
             go.Scatter(x=grp["mins"], y=grp[signal_key], line=dict(width=1)),
@@ -173,7 +171,7 @@ def _cluster_signal_peak_overlay(
 
 
 def _assign_cluster_labels(ds, clustering_kws):
-    maxima = ds.peaks.to_dataframe().reset_index()[["id_rank", "mins", "peaks"]]
+    maxima = ds.peaks.to_dataframe().reset_index()[["sample", "mins", "peaks"]]
     cluster_input = maxima.dropna().sort_values(["mins"])
     # label the clusters
 
