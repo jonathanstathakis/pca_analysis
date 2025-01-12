@@ -2,6 +2,7 @@ from .. import AbstChrom
 from xarray import DataArray, Dataset
 from .transform import Transform
 from .viz import VizShiraz
+from .decomposition import Decomposition
 
 
 class Shiraz(AbstChrom):
@@ -59,6 +60,10 @@ class Shiraz(AbstChrom):
     @property
     def viz(self) -> VizShiraz:
         return VizShiraz(da=self._da)
+
+    @property
+    def decomp(self):
+        return Decomposition(da=self._da)
 
     @property
     def dims(self):

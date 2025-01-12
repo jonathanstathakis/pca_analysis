@@ -1,32 +1,17 @@
-import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.preprocessing import MinMaxScaler
 from sklearn.decomposition import PCA as skPCA
-import matplotlib.pyplot as plt
-from copy import deepcopy
+from sklearn.preprocessing import MinMaxScaler
+import plotly.graph_objects as go
 
 
-class PCA(skPCA):
-    def scree_plot(self, display_percentage_cutoff=1e-3, exp_var_change_prop=0.01):
-        if not hasattr(self, "explained_variance_"):
-            raise RuntimeError("call `fit_transform` first")
-
-        pca_scree_plot(
-            explained_variance=self.explained_variance_,
-            display_percentage_cutoff=display_percentage_cutoff,
-            exp_var_change_prop=exp_var_change_prop,
-        )
-
-
-def pca_scree_plot(
-    explained_variance, display_percentage_cutoff=1e-3, exp_var_change_prop=0.01
-):
+def pca_scree_plot(explained_variance, exp_var_change_prop=0.01):
     """
     draw a bar scree plot of the explained variance vs number of components.
     Additionally, adds a line indicating the number of components at which the change
     in explained variance does not exceed a user-defined proportion of change, given
     as `exp_var_change_prop`.
 
+    TODO change the annotation to a vertical line.
     """
     # implementation taken from <https://www.jcchouinard.com/pca-scree-plot/>
 
@@ -45,8 +30,6 @@ def pca_scree_plot(
     )
     exp_var_change_prop = sig_component_idxs[0][-1]
 
-    import plotly.graph_objects as go
-
     fig = go.Figure()
 
     fig.add_trace(
@@ -58,13 +41,13 @@ def pca_scree_plot(
         )
     )
 
-    fig.add_annotation(
-        x=exp_var_change_prop,
-        y=explained_variance[exp_var_change_prop],
-        text=str(exp_var_change_prop),
-    )
+    # fig.add_annotation(
+    #     x=,
+    #     y=explained_variance[exp_var_change_prop],
+    #     text=str(exp_var_change_prop),
+    # )
     fig.add_vline(
-        exp_var_change_prop, line=dict(dash="dash"), name="signif. comp. cutoff"
+        exp_var_change_prop, line_dash="dash", line_width=3, name="signif. comp. cutoff"
     )
 
     fig.update_layout(
@@ -79,3 +62,14 @@ def pca_scree_plot(
     )
     fig.show()
     return exp_var_change_prop
+
+
+class PCA(skPCA):
+    def scree_plot(self, exp_var_change_prop=0.01):
+        if not hasattr(self, "explained_variance_"):
+            raise RuntimeError("call `fit_transform` first")
+
+        pca_scree_plot(
+            explained_variance=self.explained_variance_,
+            exp_var_change_prop=exp_var_change_prop,
+        )
