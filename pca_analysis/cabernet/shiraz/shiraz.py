@@ -5,6 +5,19 @@ from .viz import VizShiraz
 from .decomposition import Decomposition
 
 
+class Stats(AbstChrom):
+    def __init__(self, da: DataArray):
+        self._da = da
+
+    @property
+    def mean_max_spectral_label(self):
+        return self._da.mean(self.TIME).mean(self.SAMPLE).idxmax().item()
+
+    @property
+    def max_sample_label(self):
+        return self._da.mean(self.TIME).mean(self.SPECTRA).idxmax().item()
+
+
 class Shiraz(AbstChrom):
     def __init__(self, da: DataArray):
         """
@@ -68,6 +81,10 @@ class Shiraz(AbstChrom):
     @property
     def dims(self):
         return self._da.dims
+
+    @property
+    def stats(self):
+        return Stats(da=self._da)
 
     def __getitem__(self, key):
         result = self._da[key]
