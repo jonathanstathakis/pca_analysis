@@ -4,16 +4,16 @@ from xarray import DataArray
 
 
 @pytest.fixture
-def cab_trans(cab: Cabernet) -> Cabernet:
+def cab_for_trans(cab: Cabernet) -> Cabernet:
     """
     A subset of the Cabernet test set, destined to grow with transformations.
     """
-    return cab.isel(sample=[0, 5])
+    return cab.isel(sample=[0, 2]).sel(wavelength=[256, 330])
 
 
 @pytest.fixture
-def shz_trans(cab: Cabernet) -> Shiraz:
-    shz = cab["input_data"]
+def shz_trans(cab_for_trans: Cabernet) -> Shiraz:
+    shz = cab_for_trans["input_data"]
     if isinstance(shz, Shiraz):
         return shz
     else:
@@ -49,13 +49,13 @@ def test_shiraz_bcorr_attrs(bcorred: Cabernet):
     assert bcorred._dt.attrs["data_model_type"] == "baseline corrected"
 
 
-def test_assign_bcorr_to_cabernet(bcorred: Cabernet, cab_trans: Cabernet):
+def test_assign_bcorr_to_cabernet(bcorred: Cabernet, cab_for_trans: Cabernet):
     """
     Assign the results of baseline correction to a Cabernet tree.
     """
     name = bcorred.name
     if isinstance(name, str):
-        cab_trans = cab_trans.assign(**{name: bcorred})
-        assert cab_trans is not None
+        cab_for_trans = cab_for_trans.assign(**{name: bcorred})
+        assert cab_for_trans is not None
     else:
         raise TypeError
