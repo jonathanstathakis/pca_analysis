@@ -1,6 +1,8 @@
-from pca_analysis.exp_manager.cabernet import VizShiraz, Shiraz
+from pca_analysis.cabernet.shiraz.viz import VizShiraz
 from xarray import DataArray
 import plotly.graph_objects as go
+
+from pca_analysis.cabernet.shiraz.shiraz import Shiraz
 
 SHOW_VIZ = True
 

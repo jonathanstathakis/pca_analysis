@@ -1,6 +1,7 @@
 import pytest
 import xarray as xr
-from pca_analysis.exp_manager.cabernet import Cabernet, Shiraz
+from pca_analysis.cabernet.cabernet import Cabernet
+from pca_analysis.cabernet.shiraz.shiraz import Shiraz
 
 
 def test_Cabernet_init():
@@ -87,7 +88,7 @@ def test_cabernet_set_dim_names(cab: Cabernet):
     test whether the names can be altered in the global space via importing the var.
     """
 
-    from pca_analysis.exp_manager import cabernet
+    from pca_analysis import cabernet
 
     shz = cab["input_data"]
 

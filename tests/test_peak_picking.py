@@ -1,6 +1,6 @@
 import pytest
 from pca_analysis.peak_picking import PeakPicker
-from pca_analysis.exp_manager.cabernet import Shiraz
+from pca_analysis.cabernet.shiraz.shiraz import Shiraz
 from xarray import DataArray
 from pca_analysis.get_dataset import get_shiraz_dataset
 # TODO define fixtures. input data, peak picker with pick_peaks run.

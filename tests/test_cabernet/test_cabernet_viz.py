@@ -1,6 +1,8 @@
 import pytest
-from pca_analysis.exp_manager.cabernet import Cabernet, Shiraz
+from pca_analysis.cabernet.cabernet import Cabernet
 from xarray import Dataset, DataArray, DataTree
+
+from pca_analysis.cabernet.shiraz.shiraz import Shiraz
 
 
 @pytest.fixture

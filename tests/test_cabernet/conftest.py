@@ -2,7 +2,7 @@ import pytest
 
 from xarray import DataArray, Dataset, DataTree
 from pca_analysis import get_dataset
-from pca_analysis.exp_manager.cabernet import Cabernet
+from pca_analysis.cabernet.cabernet import Cabernet
 
 
 @pytest.fixture
