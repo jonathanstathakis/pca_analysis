@@ -1,6 +1,8 @@
 import numpy as np
 from pybaselines.smooth import snip as pysnip
 import xarray as xr
+from sklearn_xarray.preprocessing import Resampler, BaseTransformer
+from xarray import Dataset
 
 
 def snip_xr(
@@ -47,9 +49,6 @@ def apply_snip(x, **kwargs):
     return result
 
 
-from sklearn_xarray.preprocessing import Resampler, BaseTransformer
-
-
 class SNIP(BaseTransformer):
     def __init__(
         self,
@@ -89,10 +88,27 @@ def snip(da: xr.DataArray, core_dim, **kwargs):
     if not isinstance(da, xr.DataArray):
         raise TypeError
 
+    default_kwargs = dict(
+        max_half_window=None,
+        decreasing=False,
+        smooth_half_window=None,
+        filter_order=2,
+        x_data=None,
+        pad_kwargs=None,
+    )
+
+    # merge input kwargs and default kwargs, favoring input kwargs
+    merged_kwargs = {}
+    for k in default_kwargs:
+        if k in kwargs:
+            merged_kwargs[k] = kwargs[k]
+        else:
+            merged_kwargs[k] = default_kwargs[k]
+
     baselines = xr.apply_ufunc(
         apply_snip,
         da,
-        kwargs=kwargs,
+        kwargs=merged_kwargs,
         input_core_dims=[
             [core_dim],
         ],
@@ -101,5 +117,10 @@ def snip(da: xr.DataArray, core_dim, **kwargs):
         vectorize=True,
     )
 
-    dcorr = da - baselines
-    return dcorr, baselines
+    corr = da - baselines
+
+    corr = corr.rename("corrected")
+    baselines = baselines.rename("baselines")
+    ds = Dataset(data_vars={corr.name: corr, baselines.name: baselines})
+    ds = ds.assign_attrs(bline_fit_params=merged_kwargs)
+    return ds
