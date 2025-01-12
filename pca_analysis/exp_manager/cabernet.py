@@ -14,12 +14,17 @@ import plotly.io as pio
 
 pio.templates.default = "seaborn"
 
+# FIXME this current arrangement of setting the expected dim names of the da in the global space will probably cause issues if they are changed during a runtime where
+# another Cabernet object with different dim names already exists. The solution
+# will be to set this in the init, preferably through a class method initializer, called
+# for example advanced_init or something.
+
 
 @dataclass
 class ChromDims:
-    SAMPLE = "sample"
-    TIME = "mins"
-    SPECTRA = "wavelength"
+    SAMPLE: str
+    TIME: str
+    SPECTRA: str
 
     def __len__(self):
         return len(self.__dict__.keys())
@@ -34,7 +39,7 @@ class Names:
     CHROM = "input_data"
 
 
-chrom_dims = ChromDims()
+chrom_dims = ChromDims(SAMPLE="sample", TIME="mins", SPECTRA="wavelength")
 names = Names()
 CORE_DIM = chrom_dims.TIME
 
@@ -45,11 +50,25 @@ class AbstChrom:
     chromatogram should have `SAMPLE`, `TIME`, `SPECTRA` dims only.
     """
 
-    CHROM = names.CHROM
-    SAMPLE = chrom_dims.SAMPLE
-    TIME = chrom_dims.TIME
-    SPECTRA = chrom_dims.SPECTRA
-    DIMS = [SAMPLE, TIME, SPECTRA]
+    @property
+    def CHROM(self):
+        return names.CHROM
+
+    @property
+    def SAMPLE(self):
+        return chrom_dims.SAMPLE
+
+    @property
+    def TIME(self):
+        return chrom_dims.TIME
+
+    @property
+    def SPECTRA(self):
+        return chrom_dims.SPECTRA
+
+    @property
+    def DIMS(self):
+        return chrom_dims.SAMPLE, chrom_dims.TIME, chrom_dims.SPECTRA
 
 
 class VizCabernet(AbstChrom):
