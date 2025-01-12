@@ -4,7 +4,7 @@ Adds a plotly accessor for xarray Datasets and DataArrays
 
 import xarray as xr
 import plotly.express as px
-from pca_analysis.xr_signal import facet_plot_multiple_traces
+from pca_analysis.xr_signal import plot_multiple_vars
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from itertools import cycle
@@ -30,9 +30,9 @@ class PlotlyAccessorDS:
         is 1D.
         """
 
-        return facet_plot_multiple_traces(
+        return plot_multiple_vars(
             ds=self._ds,
-            facet_col=facet_col,
+            facet_dim=facet_col,
             var_keys=var_keys,
             x_key=x_key,
             col_wrap=col_wrap,
@@ -56,7 +56,7 @@ class PlotlyAccessorDA:
         ```
         fig = (da
             .plotly
-            .line(x="mins", y="raw_data", color="id_rank")
+            .line(x="mins", y="raw_data", color="sample")
             )
         ```
 
@@ -117,51 +117,6 @@ def facet(da: xr.DataArray, n_cols=1, plot_type="heatmap", x=None, y=None, z=Non
             fig = multiple_lines(da=da, colormap=colormap, z=z, y=y, x=x, n_cols=n_cols)
         case "heatmap":
             fig = heatmaps(da=da, z=z, y=y, x=x, n_cols=n_cols)
-
-    return fig
-
-
-def heatmaps(
-    da,
-    z,
-    y,
-    x,
-    n_cols,
-):
-    """
-    TODO: fix multiple generation of color scale bar.
-    """
-    grpby = da.groupby(z)
-    n_traces = len(grpby.groups)
-    n_rows = int(np.ceil(n_traces / n_cols))
-
-    fig = make_subplots(
-        rows=n_rows,
-        cols=n_cols,
-        subplot_titles=[str(x) for x in grpby.groups.keys()],
-        x_title=x,
-        y_title=y,
-    )
-
-    curr_row = 1
-    curr_col = 1
-    for dim_1_label, dim_1_da in grpby:
-        fig.add_trace(
-            trace=go.Heatmap(
-                x=dim_1_da[x],
-                y=dim_1_da[y],
-                z=dim_1_da.data.squeeze(),
-                name=str(dim_1_label),
-            ),
-            row=curr_row,
-            col=curr_col,
-        )
-        curr_col += 1
-        if curr_col > n_cols:
-            curr_col = 1
-            curr_row += 1
-
-    fig.update_layout(height=1000, title=f"heatmaps of {da.name} over '{z}'")
 
     return fig
 
