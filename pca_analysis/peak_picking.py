@@ -194,12 +194,121 @@ def plot_peaks(
     return fig
 
 
+class PeakPicker:
+    def __init__(self, da):
+        """
+        peak picker for XArray DataArrays.
+        """
+
+        if not isinstance(da, xr.DataArray):
+            raise TypeError("expected DataArray")
+        self._da = da
+        self._peak_table = pd.DataFrame()
+        self._dataarray = None
+        self._pt_idx_cols = []
+
+    def pick_peaks(
+        self, core_dim=None, find_peaks_kwargs=dict(), peak_widths_kwargs=dict()
+    ) -> None:
+        peak_tables = []
+
+        # if x is not an iterable, make it so, so we can iterate over it. This is because x
+        # can optionally be an iterable.
+
+        da = self._da
+
+        group_cols = [
+            x
+            for x in self._da.sizes.keys()
+            if x not in (core_dim if isinstance(core_dim, list) else [core_dim])
+        ]
+
+        # after the above operation, if group_cols is an empty list, then the input
+        # only contains one group.
+
+        self._pt_idx_cols = [str(core_dim), "peak", "property"]
+
+        if not group_cols:
+            da = da.expand_dims("grp")
+            group_cols = ["grp"]
+
+        self._pt_idx_cols += group_cols
+
+        # for each group in grouper get the group label and group
+        for grp_label, group in da.groupby(group_cols):
+            # generate the peak table for the current group
+            peak_table = tablulate_peaks_1D(
+                x=group.squeeze(),
+                find_peaks_kwargs=find_peaks_kwargs,
+                peak_widths_kwargs=peak_widths_kwargs,
+            )
+
+            # label each groups peak table with the group column name and values to provide
+            # identifying columns for downstream joining etc.
+            # works for multiple groups and single groups.
+            for idx, val in enumerate(
+                grp_label if isinstance(grp_label, tuple) else [grp_label]
+            ):
+                peak_table[group_cols[idx]] = val
+
+            # add the core dim column subset by the peak indexes
+            peak_table = peak_table.assign(
+                mins=group.mins[peak_table["p_idx"].values].values
+            )
+
+            peak_table = peak_table.reset_index()
+            peak_tables.append(peak_table)
+
+        peak_table = pd.concat(peak_tables)
+
+        # remove helper group label
+        if "grp" in self._pt_idx_cols:
+            self._pt_idx_cols.remove("grp")
+            self._peak_table = peak_table.drop("grp", axis=1)
+        else:
+            self._peak_table = peak_table
+
+    @property
+    def table(self):
+        return self._peak_table
+
+    @property
+    def dataarray(self):
+        """
+        add the peak table as a dataarray. First time this is called it will generate
+        the xarray DataArray attribute from the `table` attribute, storing the result
+        internally for quicker returns if called again.
+        """
+
+        if self._dataarray is None:
+            var_name = "property"
+            id_vars = self._pt_idx_cols.copy()
+            id_vars.remove(var_name)
+
+            pt_da = (
+                self._peak_table.melt(
+                    id_vars=id_vars,
+                    var_name=var_name,
+                )
+                .set_index(self._pt_idx_cols)
+                .to_xarray()
+                .to_dataarray(dim="value")
+                .drop_vars("value")
+                .squeeze()
+            )
+            pt_da.name = "peak_table"
+            self._dataarray = pt_da
+            return self._dataarray
+        else:
+            return self._dataarray
+
+
 def compute_dataarray_peak_table(
-    xa: xr.DataArray, core_dim=None, find_peaks_kwargs=dict(), peak_widths_kwargs=dict()
+    da: xr.DataArray, core_dim=None, find_peaks_kwargs=dict(), peak_widths_kwargs=dict()
 ) -> xr.DataArray:
     import pandas as pd
 
-    if not isinstance(xa, xr.DataArray):
+    if not isinstance(da, xr.DataArray):
         raise TypeError("expected DataArray")
 
     peak_tables = []
@@ -209,7 +318,7 @@ def compute_dataarray_peak_table(
 
     group_cols = [
         x
-        for x in xa.sizes.keys()
+        for x in da.sizes.keys()
         if x not in (core_dim if isinstance(core_dim, list) else [core_dim])
     ]
 
@@ -219,13 +328,13 @@ def compute_dataarray_peak_table(
     pt_idx_cols = [str(core_dim), "peak", "property"]
 
     if not group_cols:
-        xa = xa.expand_dims("grp")
+        da = da.expand_dims("grp")
         group_cols = ["grp"]
 
     pt_idx_cols += group_cols
 
     # for each group in grouper get the group label and group
-    for grp_label, group in xa.groupby(group_cols):
+    for grp_label, group in da.groupby(group_cols):
         # generate the peak table for the current group
         peak_table = tablulate_peaks_1D(
             x=group.squeeze(),
