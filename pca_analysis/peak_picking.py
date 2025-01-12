@@ -12,6 +12,22 @@ from itertools import cycle
 PEAKS = "peaks"
 
 
+def _get_da_as_df(da: xr.DataArray):
+    """return the dataarray as a dataframe with only the key dimensional variables and the data."""
+    drop_vars = set(da.coords).difference(set(da.sizes.keys()))
+
+    return da.drop_vars(drop_vars).to_dataframe()
+
+
+def get_peak_table_as_df(pt: xr.DataArray):
+    """
+    return the peak table as a flattened, pivoted dataframe
+    """
+
+    pt_ = _get_da_as_df(da=pt).unstack().droplevel(0, axis=1).dropna().reset_index()
+    return pt_
+
+
 def find_peaks(
     ds: xr.Dataset,
     signal_key: str,
