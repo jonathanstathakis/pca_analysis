@@ -14,8 +14,10 @@ from . import chrom_dims
 from ..get_dataset import get_shiraz_dataset
 
 from .shiraz.shiraz import Shiraz
+from pathlib import PurePath
 
 pio.templates.default = "seaborn"
+StrOrPath = str | PurePath
 
 
 class VizCabernet(AbstChrom):
@@ -124,6 +126,42 @@ class VizCabernet(AbstChrom):
                 curr_col += 1
         return fig
 
+    def overlay_peaks(
+        self,
+        signal_path,
+        peaks_path,
+        peak_outlines: bool = True,
+        peak_width_calc: bool = True,
+    ):
+        """
+        create a peak overlay of the peaks found at `peaks_path` and the signal at `signal_path`.
+
+
+        Requires that the calling Cabernet has only 1 dimension: time.
+        """
+        ...
+
+        from pca_analysis.peak_picking import get_peak_table_as_df, plot_peaks
+
+        peak_array = self._dt.get(peaks_path)
+
+        assert isinstance(peak_array, DataArray)
+
+        pdf = get_peak_table_as_df(pt=peak_array)
+
+        signal_array = self._dt.get(signal_path)
+
+        assert isinstance(signal_array, DataArray)
+
+        fig = plot_peaks(
+            peak_table=pdf,
+            input_signal=signal_array.data,
+            peak_outlines=peak_outlines,
+            peak_width_calc=peak_width_calc,
+        )
+
+        return fig
+
 
 class Cabernet(AbstChrom):
     def __init__(self, da: DataArray):
@@ -168,8 +206,8 @@ class Cabernet(AbstChrom):
         return Cabernet(da=da)
 
     def sel(self, **kwargs):
-        self._dt = self._dt.sel(**kwargs)
         cab = self.copy()
+        cab._dt = cab._dt.sel(**kwargs)
         return cab
 
     def isel(self, **kwargs):
@@ -205,7 +243,13 @@ class Cabernet(AbstChrom):
 
     def get(self, key, default: DataTree | DataArray | None = None):
         result = self._dt.get(key=key, default=default)
-        return result
+
+        if isinstance(result, DataTree):
+            return Cabernet.from_tree(dt=result)
+        elif isinstance(result, DataArray):
+            return Shiraz(da=result)
+        else:
+            raise TypeError
 
     def assign(self, items=None, **items_kwargs):
         """
@@ -226,7 +270,34 @@ class Cabernet(AbstChrom):
     def __repr__(self):
         return repr(self._dt)
 
-    def peak_picking(self, path, find_peaks_kwargs={}, peak_width_kwargs={}): ...
+    def peak_array_as_df(self, path: StrOrPath):
+        from pca_analysis.peak_picking import get_peak_table_as_df
+
+        peak_array = self._dt[str(path)]
+
+        assert isinstance(peak_array, DataArray)
+        df = get_peak_table_as_df(pt=peak_array)
+
+        return df
+
+    def pick_peaks(self, path: StrOrPath, find_peaks_kwargs={}, peak_width_kwargs={}):
+        shz = self.get(path)
+
+        assert isinstance(shz, Shiraz)
+
+        peak_array = shz.pick_peaks(
+            find_peaks_kwargs=find_peaks_kwargs, peak_width_kwargs=peak_width_kwargs
+        )
+
+        peak_path = PurePath(path).parent / "peaks"
+
+        dt = self._dt.copy()
+
+        dt[str(peak_path)] = peak_array
+
+        cab = Cabernet.from_tree(dt=dt)
+
+        return cab
 
     def _repr_html_(self):
         return self._dt._repr_html_()

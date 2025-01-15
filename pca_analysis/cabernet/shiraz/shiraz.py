@@ -3,6 +3,7 @@ from xarray import DataArray, Dataset
 from .transform import Transform
 from .viz import VizShiraz
 from .decomposition import Decomposition
+from ...peak_picking import PeakPicker
 
 
 class Stats(AbstChrom):
@@ -61,6 +62,22 @@ class Shiraz(AbstChrom):
         shz = self.copy()
         shz._da = shz._da.isel(**kwargs)
         return shz
+
+    def pick_peaks(self, find_peaks_kwargs={}, peak_width_kwargs={}):
+        """
+        pick peaks in the DataArray.
+        """
+
+        pp = PeakPicker(da=self._da)
+        pp.pick_peaks(
+            core_dim=self.CORE_DIM,
+            find_peaks_kwargs=find_peaks_kwargs,
+            peak_widths_kwargs=peak_width_kwargs,
+        )
+        arr = pp.dataarray
+        arr = arr.assign_attrs(dict(_data_model_type="peaks"))
+
+        return arr
 
     @property
     def shape(self):

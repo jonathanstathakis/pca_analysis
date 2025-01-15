@@ -8,6 +8,8 @@ import xarray as xr
 from . import xr_signal
 import plotly.graph_objects as go
 from itertools import cycle
+from scipy import signal
+import pandas as pd
 
 PEAKS = "peaks"
 
@@ -54,10 +56,6 @@ def find_peaks(
     )
 
     return ds_
-
-
-from scipy import signal
-import pandas as pd
 
 
 def tablulate_peaks_1D(
@@ -122,11 +120,10 @@ def plot_peaks(
         draw the line calculating the peak widths as both the line drawn from maximum
         to the width height and then extending out to either peak boundary.
     """
-    import plotly.io as pio
+    # TODO: sync this with current template rather than arbritrary colorscheme
+    import plotly.express as px
 
-    colors = cycle(
-        pio.templates[pio.templates.default]["layout"]["colorscale"]["diverging"]
-    )
+    colors = cycle(cycle(px.colors.qualitative.Plotly))
 
     fig = go.Figure()
 
@@ -146,7 +143,8 @@ def plot_peaks(
                     y=[row["width_height"], row["maxima"], row["width_height"]],
                     name="outline",
                     mode="lines",
-                    line=dict(color=color[1], width=1),
+                    line_color=color,
+                    line_width=1,
                     legendgroup=idx,
                     legendgrouptitle_text=idx,
                 )
@@ -171,7 +169,9 @@ def plot_peaks(
                     ],
                     name="width",
                     mode="lines",
-                    line=dict(dash="dot", width=0.75, color=color[1]),
+                    line_dash="dot",
+                    line_width=0.75,
+                    line_color=color,
                     legendgroup=idx,
                     legendgrouptitle_text=idx,
                 ),
@@ -184,7 +184,8 @@ def plot_peaks(
                 y=[row["maxima"]],
                 mode="markers",
                 name="maxima",
-                marker=dict(color=color[1], size=3),
+                marker_color=color,
+                marker_size=5,
                 legendgroup=idx,
                 legendgrouptitle_text=idx,
             )
@@ -208,7 +209,10 @@ class PeakPicker:
         self._pt_idx_cols = []
 
     def pick_peaks(
-        self, core_dim=None, find_peaks_kwargs=dict(), peak_widths_kwargs=dict()
+        self,
+        core_dim: str | list = "",
+        find_peaks_kwargs=dict(),
+        peak_widths_kwargs=dict(),
     ) -> None:
         peak_tables = []
 
@@ -253,7 +257,7 @@ class PeakPicker:
 
             # add the core dim column subset by the peak indexes
             peak_table = peak_table.assign(
-                mins=group.mins[peak_table["p_idx"].values].values
+                **{core_dim: group[core_dim][peak_table["p_idx"].values].values}
             )
 
             peak_table = peak_table.reset_index()
