@@ -72,6 +72,40 @@ def test_setitem(cab: Cabernet):
     assert cab.get("new_item") is not None
 
 
+def test_cab_sel_returns_shiraz(cab: Cabernet):
+    """
+    test that sel correctly subsets.
+    """
+    selected_sample = 7
+    result = cab.sel(sample=selected_sample)["sample"]
+    if isinstance(result, Shiraz):
+        assert len(result) == 2
+    else:
+        raise TypeError
+
+
+def test_cab_sel_returns_cabernet(cab: Cabernet):
+    """
+    test that sel correctly subsets.
+    """
+    selected_sample = 7
+    result = cab.sel(sample=selected_sample)
+    if not isinstance(result, Cabernet):
+        raise TypeError
+
+
+def test_cab_sel_returns_copy(cab: Cabernet):
+    """
+    test that sel correctly subsets.
+    """
+    selected_sample = 7
+    result = cab.sel(sample=selected_sample)
+    if not isinstance(result, Cabernet):
+        raise TypeError
+
+    assert result is not cab
+
+
 def test_cab_isel(cab: Cabernet):
     """
     test that isel correctly subsets.

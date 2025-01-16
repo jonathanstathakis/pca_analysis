@@ -12,7 +12,7 @@ from xarray import DataArray, DataTree
 from . import AbstChrom
 from . import chrom_dims
 from ..get_dataset import get_shiraz_dataset
-
+from .rank_estimation import RankEstimation
 from .shiraz.shiraz import Shiraz
 from pathlib import PurePath
 
@@ -324,3 +324,7 @@ class Cabernet(AbstChrom):
     @property
     def viz(self):
         return VizCabernet(dt=self._dt)
+
+    @property
+    def rank_estimation(self):
+        return RankEstimation(dt=self._dt)
