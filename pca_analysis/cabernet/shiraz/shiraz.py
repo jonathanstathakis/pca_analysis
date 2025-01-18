@@ -34,6 +34,15 @@ class Shiraz(AbstChrom):
     def __len__(self):
         return self._da.__len__()
 
+    def to_cabernet(self):
+        """
+        convert a Shiraz to a Cabernet
+        """
+        from pca_analysis.cabernet.cabernet import Cabernet
+
+        cab = Cabernet(da=self._da)
+        return cab
+
     def copy(self):
         """
         make a copy of the internal DataTree, returning a new Cabernet object.

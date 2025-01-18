@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 import plotly.io as pio
 import xarray as xr
 from plotly.subplots import make_subplots
-from xarray import DataArray, DataTree
+from xarray import DataArray, DataTree, open_datatree
 
 from . import AbstChrom
 from . import chrom_dims
@@ -186,6 +186,52 @@ class Cabernet(AbstChrom):
         self._dt = xr.DataTree(dataset=xr.Dataset({da.name: da}))
 
     @classmethod
+    def from_file(
+        cls,
+        filename_or_obj,
+        *,
+        engine=None,
+        chunks=None,
+        cache=None,
+        decode_cf=None,
+        mask_and_scale=None,
+        decode_times=None,
+        decode_timedelta=None,
+        use_cftime=None,
+        concat_characters=None,
+        decode_coords=None,
+        drop_variables=None,
+        inline_array=False,
+        chunked_array_type=None,
+        from_array_kwargs=None,
+        backend_kwargs=None,
+        **kwargs,
+    ):
+        dt = open_datatree(
+            filename_or_obj,
+            engine=engine,
+            chunks=chunks,
+            cache=cache,
+            decode_cf=decode_cf,
+            mask_and_scale=mask_and_scale,
+            decode_times=decode_times,
+            decode_timedelta=decode_timedelta,
+            use_cftime=use_cftime,
+            concat_characters=concat_characters,
+            decode_coords=decode_coords,
+            drop_variables=drop_variables,
+            inline_array=inline_array,
+            chunked_array_type=chunked_array_type,
+            from_array_kwargs=from_array_kwargs,
+            backend_kwargs=backend_kwargs,
+            **kwargs,
+        )
+
+        cab = Cabernet.from_tree(dt=dt)
+
+        return cab
+
+    @classmethod
     def from_tree(cls, dt: xr.DataTree):
         """
         Initilise Cabernet from a DataTree.
@@ -305,6 +351,32 @@ class Cabernet(AbstChrom):
     def keys(self):
         return self._dt.keys()
 
+    def to_netcdf(
+        self,
+        filepath: StrOrPath,
+        mode="w",
+        encoding=None,
+        unlimited_dims=None,
+        format=None,
+        engine=None,
+        group=None,
+        write_inherited_coords=False,
+        compute=True,
+        **kwargs,
+    ):
+        self._dt.to_netcdf(
+            filepath=filepath,
+            mode=mode,
+            encoding=encoding,
+            unlimited_dims=unlimited_dims,
+            format=format,
+            engine=engine,
+            group=group,
+            write_inherited_coords=write_inherited_coords,
+            compute=compute,
+            **kwargs,
+        )
+
     @property
     def data_vars(self):
         return self._dt.data_vars
@@ -328,3 +400,9 @@ class Cabernet(AbstChrom):
     @property
     def rank_estimation(self):
         return RankEstimation(dt=self._dt)
+
+    @property
+    def decomp(self):
+        from .decomposition import Decomposition
+
+        return Decomposition(dt=self._dt)
