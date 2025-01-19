@@ -133,10 +133,9 @@ def plot_peaks(
         fig.add_trace(go.Scatter(y=input_signal, name="signal"))
 
     for color, (idx, row) in zip(colors, peak_table.iterrows()):
+        # plot the peaks as mapped by `peak_widths`
+        # the base height is `width_height`
         if peak_outlines:
-            # plot the peaks as mapped by `peak_widths`
-            # the base height is `width_height`
-
             fig.add_trace(
                 go.Scatter(
                     x=[row["left_ip"], row["p_idx"], row["right_ip"]],
@@ -150,6 +149,7 @@ def plot_peaks(
                 )
             )
 
+        # draw the peak width calculation
         if peak_width_calc:
             fig.add_trace(
                 go.Scatter(
