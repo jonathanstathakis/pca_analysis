@@ -128,8 +128,8 @@ class VizCabernet(AbstChrom):
 
     def overlay_peaks(
         self,
-        signal_path,
-        peaks_path,
+        signal_path: StrOrPath,
+        peaks_path: StrOrPath,
         peak_outlines: bool = True,
         peak_width_calc: bool = True,
     ):
@@ -143,13 +143,13 @@ class VizCabernet(AbstChrom):
 
         from pca_analysis.peak_picking import get_peak_table_as_df, plot_peaks
 
-        peak_array = self._dt.get(peaks_path)
+        peak_array = self._dt.get(str(peaks_path))
 
         assert isinstance(peak_array, DataArray)
 
         pdf = get_peak_table_as_df(pt=peak_array)
 
-        signal_array = self._dt.get(signal_path)
+        signal_array = self._dt.get(str(signal_path))
 
         assert isinstance(signal_array, DataArray)
 
@@ -327,6 +327,10 @@ class Cabernet(AbstChrom):
         return df
 
     def pick_peaks(self, path: StrOrPath, find_peaks_kwargs={}, peak_width_kwargs={}):
+        """
+        Map the peaks of the DataArray at `path`, adding the map as a DataArray at "{path} / 'peaks'", returning a copy
+        Cabernet object with the peak map.
+        """
         shz = self.get(path)
 
         assert isinstance(shz, Shiraz)
@@ -406,3 +410,7 @@ class Cabernet(AbstChrom):
         from .decomposition import Decomposition
 
         return Decomposition(dt=self._dt)
+
+    @property
+    def dims(self):
+        return self._dt.dims

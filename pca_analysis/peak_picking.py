@@ -10,6 +10,387 @@ import plotly.graph_objects as go
 from itertools import cycle
 from scipy import signal
 import pandas as pd
+import numpy as np
+from plotly.subplots import make_subplots
+import plotly.express as px
+from dataclasses import dataclass
+
+
+class Grid:
+    def __init__(self, n_cells: int, col_wrap: int):
+        """
+        compute a mapping between an array of subplots and a subplot grid
+        """
+
+        self.n_cells = n_cells
+        self.col_wrap = col_wrap
+        self.n_rows = int(np.ceil(n_cells / col_wrap))
+        self.cells = []
+        self.construct_grid()
+
+    def construct_grid(self):
+        """
+        build a grid coordinate structure as a list of tuples
+        """
+
+        for row in range(1, self.n_rows + 1):
+            for col in range(1, self.col_wrap + 1):
+                self._add_cell(row=row, col=col)
+
+    def _add_cell(self, row: int, col: int):
+        self.cells.append(Cell(row=row, col=col))
+
+    def display_grid(self):
+        for row_idx in range(self.n_rows + 1):
+            row = [x for x in self.cells if x[0] == row_idx]
+            print(row)
+
+    def map_flat_grid(self):
+        return {k: v for k, v in enumerate(self.cells)}
+
+
+class Cell:
+    def __init__(self, row, col):
+        self.row = row
+        self.col = col
+
+
+from plotly.basedatatypes import BaseTraceType
+from typing import Any
+
+
+class TraceCollection:
+    def __init__(self, traces: dict[Any, BaseTraceType] = {}, name: str = ""):
+        """
+        For treating collections of traces as single object
+
+        Parameters
+        ==========
+
+        traces: dict[str, BaseTraceType]
+            a labelled collection of Plotly traces, i.e. go.Scatter
+        name: str = ""
+            the name of the collection
+
+        Methods
+        =======
+
+        """
+
+        assert isinstance(traces, dict)
+        assert isinstance(name, str)
+
+        self._traces = traces
+        self.name = name
+
+    def __getitem__(self, key):
+        return self._traces[key]
+
+    def __setitem__(self, key, data):
+        self._traces[key] = data
+
+    def __repr__(self):
+        import pprint
+
+        repr_dict = {}
+
+        for k, v in self._traces.items():
+            repr_dict[k] = dict(name=v.name, type=type(v), meta=v["meta"])
+        repr_str = (
+            f"""TraceCollection\n"""
+            """===============\n"""
+            f"""len: {len(self.traces)}\n"""
+            f"""{pprint.pformat(repr_dict)}\n"""
+        )
+        return repr_str
+
+    @property
+    def traces(self):
+        return list(self._traces.values())
+
+
+# TODO define a Trace collectoin type for handling collections of related traces as single objects. Main point is to define view_setting, update_setting methods on it to control how it displays.
+
+
+class SubPlot:
+    """
+    collection of traces and other data for each subplot
+    """
+
+    def __init__(
+        self,
+        peak_table: pd.DataFrame = pd.DataFrame(),
+        input_signal_data=None,
+        sample: str = "",
+        title: str = "",
+    ):
+        self.input_signal_data = input_signal_data
+        self.peak_table = peak_table
+        self.sample = sample
+        self.title = title
+
+        self.signal = go.Scatter()
+        self.peak_width_calcs = TraceCollection(name="peak_width_calcs")
+        self.maximas = TraceCollection(name="maximas")
+        self.peak_outlines = TraceCollection(name="peak_outlines")
+
+        self._attr_names = [
+            "signal",
+            "peak_width_calcs",
+            "maximas",
+            "peak_outlines",
+        ]
+
+        colormap = px.colors.qualitative.Plotly
+        self.signal_color = colormap[0]
+        peak_colors = colormap[1:]
+
+        if len(peak_colors) < self.peak_table.shape[0]:
+            diff = self.peak_table.shape[0] - len(peak_colors)
+            self.peak_colors = peak_colors + peak_colors[:diff]
+        else:
+            self.peak_colors = colormap
+
+    def update_attr(self, name: str, **kwargs):
+        if name == "all":
+            for name in self._attr_names:
+                self._update_attr(name, **kwargs)
+        else:
+            self._update_attr(name=name, **kwargs)
+
+    def _view_setting(self, settings: list[str]):
+        """
+        provide a view of all attribute settings
+        """
+
+        settings_mapping = {}
+
+        # need to iterate over the dict of traces or
+        # the signal trace equally.
+
+        # for k in self._attr_names:
+        #     for setting in settings:
+        #         attr = setting_val = getattr(self, k)
+
+        #         if isinstance(attr, go.Scatter):
+        #             setting_val =
+        #         if isinstance(attr, dict):
+        #             attr_settings_dict = {}
+        #             for k, v in attr.items():
+        #                 v[]
+
+        #         settings_mapping[k] = {}
+        #         settings_mapping[k][setting] = setting_val
+
+        return settings_mapping
+
+    def _update_attr(self, name: str, **kwargs):
+        """
+        update attribute
+        """
+        attr = getattr(self, name)
+
+        if isinstance(attr, dict):
+            new_attr = {}
+            for k, v in attr.items():
+                if not isinstance(v, go.Scatter):
+                    raise TypeError("expected Scatter object")
+
+                new_v = v.update(**kwargs)
+
+                new_attr[k] = new_v
+            setattr(self, name, new_attr)
+
+        elif isinstance(attr, go.Scatter):
+            new_attr = attr.update(**kwargs)
+            setattr(self, name, new_attr)
+        else:
+            raise TypeError(f"expected dict or Scatter. Cant update {type(attr)}")
+
+    def __str__(self):
+        return f"""
+        SubPlot
+        =======
+        
+        sample: {self.sample}
+        title: {self.title}
+        """
+
+    def __repr__(self):
+        return str(self)
+
+    def _trace_signal(self):
+        self.signal = go.Scatter(
+            y=self.input_signal_data,
+            name="signal",
+            showlegend=False,
+            meta=dict(sample=self.sample),
+            legendgroup="signal",
+            line_color=self.signal_color,
+        )
+
+    def _trace_outlines(self):
+        for color, (idx, row) in zip(self.peak_colors, self.peak_table.iterrows()):
+            self.peak_outlines[idx] = go.Scatter(
+                x=[row["left_ip"], row["p_idx"], row["right_ip"]],
+                y=[row["width_height"], row["maxima"], row["width_height"]],
+                name="outline",
+                mode="lines",
+                line_color=color,
+                line_width=1,
+                legendgroup="outline",
+                showlegend=False,
+                meta=dict(peak=idx, sample=self.sample),
+            )
+
+    def _trace_peak_width_calc(self):
+        for color, (idx, row) in zip(self.peak_colors, self.peak_table.iterrows()):
+            self.peak_width_calcs[idx] = go.Scatter(
+                x=[
+                    row["left_ip"],
+                    row["right_ip"],
+                    None,
+                    row["p_idx"],
+                    row["p_idx"],
+                ],
+                y=[
+                    row["width_height"],
+                    row["width_height"],
+                    None,
+                    row["maxima"],
+                    row["width_height"],
+                ],
+                name="width",
+                mode="lines",
+                line_dash="dot",
+                line_width=0.75,
+                line_color=color,
+                legendgroup="width_calc",
+                showlegend=False,
+                meta=dict(peak=idx, sample=self.sample),
+                customdata=[],
+            )
+
+    def _trace_maxima(self):
+        for color, (idx, row) in zip(self.peak_colors, self.peak_table.iterrows()):
+            self.maximas[idx] = go.Scatter(
+                x=[row["p_idx"]],
+                y=[row["maxima"]],
+                mode="markers",
+                name="maxima",
+                marker_color=color,
+                marker_size=5,
+                legendgroup="maxima",
+                showlegend=False,
+                meta=dict(peak=idx, sample=self.sample),
+            )
+
+    def draw_traces(self):
+        self._trace_signal()
+        self._trace_peak_width_calc()
+        self._trace_peak_width_calc()
+        self._trace_maxima()
+
+        assert True
+
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    @property
+    def traces(self) -> list:
+        traces = []
+
+        if self.signal:
+            traces.append(self.signal)
+        for attr in [
+            self.peak_outlines,
+            self.peak_width_calcs,
+            self.maximas,
+        ]:
+            if attr:
+                traces.extend(attr.traces)
+
+        return traces
+
+    def preview_plot(self):
+        """
+        return a figure object of the internal traces
+        """
+
+        traces = self.traces
+
+        fig = go.Figure()
+
+        fig.add_traces(traces)
+
+        return fig
+
+
+@dataclass
+class SubPlotCollection:
+    """
+    provide methods to return information about internal Subplopts
+    """
+
+    subplots: list[SubPlot]
+
+    @property
+    def titles(self):
+        return [str(x.title) for x in self.subplots]
+
+    def __len__(self):
+        return len(self.subplots)
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self.subplots[key]
+
+    def __setitem__(self, key, data):
+        if isinstance(key, int):
+            self.subplots[key] = data
+
+    def view_setting(self, setting: list[str]):
+        settings = {}
+        for idx, subplot in enumerate(self.subplots):
+            settings[idx] = subplot._view_setting(settings=setting)
+
+    def normalize_legend(self):
+        """
+        Set the first subplot showlegend = True, others False. Use when markers across
+        subplots belong to the same class.
+        """
+
+        subplot_0 = self.subplots[0]
+        subplot_0.update_attr(name="all", showlegend=True)
+
+        self.subplots[0] = subplot_0
+
+        for idx, subplot in enumerate(self.subplots[1:]):
+            subplot.update_attr("all", showlegend=False)
+
+            self.subplots[idx + 1] = subplot
+
+    def sel(self, **kwargs):
+        """
+        select subplots matching kwargs.
+        """
+
+        for key in kwargs.keys():
+            if not hasattr(self.subplots[0], key):
+                raise ValueError(f"{key} not a valid accessor")
+
+        temp = []
+
+        for key, val in kwargs.items():
+            for subplot in self.subplots:
+                if subplot[key] == val:
+                    temp.append(subplot)
+
+        return temp
+
+    def __iter__(self):
+        return iter(self.subplots)
+
 
 PEAKS = "peaks"
 
@@ -96,15 +477,18 @@ def tablulate_peaks_1D(
 
 
 def plot_peaks(
-    peak_table: pd.DataFrame,
-    input_signal=None,
-    peak_outlines: bool = True,
-    peak_width_calc: bool = True,
+    ds: xr.Dataset,
+    group_dim: str = "",
+    col_wrap: int = 1,
+    input_signal_key: str = "",
+    peak_table_key: str = "",
 ):
     """
     Draw the input signal overlaid with the peaks present in peak table
 
     TODO test
+    TODO test without faceting
+    TODO test with faceting.
 
     Parameters
     ----------
@@ -120,79 +504,81 @@ def plot_peaks(
         draw the line calculating the peak widths as both the line drawn from maximum
         to the width height and then extending out to either peak boundary.
     """
-    # TODO: sync this with current template rather than arbritrary colorscheme
-    import plotly.express as px
+    assert isinstance(ds, xr.Dataset)
+    assert isinstance(group_dim, str)
+    assert isinstance(col_wrap, int)
+    assert col_wrap > 0
+    assert isinstance(input_signal_key, str)
+    assert isinstance(peak_table_key, str)
 
-    colors = cycle(cycle(px.colors.qualitative.Plotly))
+    subplots = _peak_traces(
+        ds=ds,
+        group_dim=group_dim,
+        input_signal_key=input_signal_key,
+        peak_table_key=peak_table_key,
+    )
 
-    fig = go.Figure()
+    # subplots.normalize_legend()
 
-    if input_signal is not None:
-        # input signal
+    # print(subplots.view_setting(["showlegend"]))
 
-        fig.add_trace(go.Scatter(y=input_signal, name="signal"))
+    fig = _draw_subplots_on_grid(subplots=subplots, col_wrap=col_wrap)
 
-    for color, (idx, row) in zip(colors, peak_table.iterrows()):
-        # plot the peaks as mapped by `peak_widths`
-        # the base height is `width_height`
-        if peak_outlines:
-            fig.add_trace(
-                go.Scatter(
-                    x=[row["left_ip"], row["p_idx"], row["right_ip"]],
-                    y=[row["width_height"], row["maxima"], row["width_height"]],
-                    name="outline",
-                    mode="lines",
-                    line_color=color,
-                    line_width=1,
-                    legendgroup=idx,
-                    legendgrouptitle_text=idx,
-                )
-            )
+    titletext = f"'{input_signal_key}' peaks"
 
-        # draw the peak width calculation
-        if peak_width_calc:
-            fig.add_trace(
-                go.Scatter(
-                    x=[
-                        row["left_ip"],
-                        row["right_ip"],
-                        None,
-                        row["p_idx"],
-                        row["p_idx"],
-                    ],
-                    y=[
-                        row["width_height"],
-                        row["width_height"],
-                        None,
-                        row["maxima"],
-                        row["width_height"],
-                    ],
-                    name="width",
-                    mode="lines",
-                    line_dash="dot",
-                    line_width=0.75,
-                    line_color=color,
-                    legendgroup=idx,
-                    legendgrouptitle_text=idx,
-                ),
-            )
+    if group_dim:
+        titletext += f" faceted by '{group_dim}'"
 
-        # mark the maxima
-        fig.add_trace(
-            go.Scatter(
-                x=[row["p_idx"]],
-                y=[row["maxima"]],
-                mode="markers",
-                name="maxima",
-                marker_color=color,
-                marker_size=5,
-                legendgroup=idx,
-                legendgrouptitle_text=idx,
-            )
+    fig.update_layout(title_text=titletext)
+
+    return fig
+
+
+def _draw_subplots_on_grid(subplots: SubPlotCollection, col_wrap: int):
+    grid = Grid(n_cells=len(subplots), col_wrap=col_wrap)
+    fig = make_subplots(
+        rows=grid.n_rows,
+        cols=col_wrap,
+        subplot_titles=subplots.titles,
+    )
+
+    for subplot, (idx, cell) in zip(subplots, grid.map_flat_grid().items()):
+        fig.add_traces(subplot.traces, rows=cell.row, cols=cell.col)
+
+    return fig
+
+
+def _peak_traces(
+    ds: xr.Dataset,
+    group_dim: str,
+    draw_peak_outlines: bool = True,
+    draw_peak_width_calc: bool = True,
+    input_signal_key: str = "",
+    peak_table_key: str = "",
+) -> SubPlotCollection:
+    grpby = ds.groupby(group_dim)
+
+    _subplots = []
+
+    for key, sample in grpby:
+        peak_table = get_peak_table_as_df(pt=sample.squeeze()[peak_table_key])
+
+        input_signal = sample.squeeze()[input_signal_key].data
+
+        subplot = SubPlot(
+            peak_table=peak_table,
+            input_signal_data=input_signal,
+            sample=key,
+            title=f"{group_dim} = {key}",
         )
 
-    fig = fig.update_layout(title=dict(text="peak mapping"))
-    return fig
+        subplot.draw_traces()
+
+        _subplots.append(subplot)
+
+        subplots = SubPlotCollection(subplots=_subplots)
+
+    return subplots
 
 
 class PeakPicker:
