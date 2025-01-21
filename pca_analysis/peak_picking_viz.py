@@ -166,11 +166,8 @@ def _peak_traces(
     traces = []
     for key, sample in grpby:
         grp_traces = []
-        peak_table = get_peak_table_as_df(pt=sample.squeeze()[peak_table_key])
 
         input_signal = sample.squeeze()[input_signal_key].data
-
-        peak_colors = colormap[1:]
 
         grp_traces.append(
             draw_signal_trace(
@@ -179,6 +176,11 @@ def _peak_traces(
                 color=signal_color,
             )
         )
+
+        peak_colors = colormap[1:]
+        peak_table = get_peak_table_as_df(pt=sample.squeeze()[peak_table_key])
+
+        # each iteration draws the traces for one peak.
         outline_traces = []
         maxima_traces = []
         width_calc_traces = []
@@ -200,9 +202,12 @@ def _peak_traces(
                     color=color, row=row, idx=int(idx), sample=str(key)
                 )
             )
-            grp_traces += outline_traces
-            grp_traces += maxima_traces
-            grp_traces += width_calc_traces
+        # adds the traces for all the peaks for the group. Information
+        # about what group each trace belongs to is stored internally
+        # in name and in metadata.
+        grp_traces += outline_traces
+        grp_traces += maxima_traces
+        grp_traces += width_calc_traces
         traces.append(grp_traces)
     return traces
 
@@ -259,12 +264,13 @@ def plot_peaks(
     fig.update_layout(title_text=titletext)
 
     sample_0 = fig.data[0]["meta"]["sample"]
+
     # show legend for first peak trace markers
     fig.for_each_trace(
         lambda trace: trace.update(showlegend=True)
-        if trace.meta["sample"] == sample_0 and trace.meta["peak"] == 0
-        else ()
-        if "peak" in trace.data["meta"]
+        if "peak" in trace["meta"]
+        and trace.meta["sample"] == sample_0
+        and trace.meta["peak"] == 0
         else ()
     )
 
@@ -272,7 +278,7 @@ def plot_peaks(
     fig.for_each_trace(
         lambda trace: trace.update(showlegend=True)
         if trace.name == "signal" and trace.meta["sample"] == sample_0
-        else ()
+        else trace
     )
 
     return fig
