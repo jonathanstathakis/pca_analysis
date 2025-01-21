@@ -9,6 +9,8 @@ import xarray as xr
 from plotly.subplots import make_subplots
 from xarray import DataArray, DataTree, open_datatree
 
+from pca_analysis.peak_picking_viz import plot_peaks
+
 from . import AbstChrom
 from . import chrom_dims
 from ..get_dataset import get_shiraz_dataset
@@ -141,7 +143,7 @@ class VizCabernet(AbstChrom):
         """
         ...
 
-        from pca_analysis.peak_picking import get_peak_table_as_df, plot_peaks
+        from pca_analysis.peak_picking import get_peak_table_as_df
 
         peak_array = self._dt.get(str(peaks_path))
 

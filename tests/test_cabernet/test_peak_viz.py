@@ -1,5 +1,5 @@
 import pytest
-from pca_analysis.peak_picking import plot_peaks
+from pca_analysis.peak_picking_viz import plot_peaks
 from pca_analysis.cabernet.cabernet import Cabernet
 import xarray as xr
 from plotly.graph_objects import Figure

@@ -1,7 +1,7 @@
 from copy import deepcopy, copy
 import xarray as xr
 
-from pca_analysis import peak_picking
+from pca_analysis import peak_picking_viz
 from pca_analysis.peak_picking import get_peak_table_as_df
 from pca_analysis.validation import validate_da
 
@@ -108,7 +108,7 @@ def ds_plot_peaks(ds: xr.Dataset, peak_outlines, peak_width_calc):
 
     peak_table = ds.pt.pipe(get_peak_table_as_df)
 
-    return peak_picking.plot_peaks(
+    return peak_picking_viz.plot_peaks(
         peak_table=peak_table,
         input_signal=ds.input_data.data.squeeze(),
         peak_outlines=peak_outlines,
