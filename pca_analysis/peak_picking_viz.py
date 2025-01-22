@@ -5,7 +5,8 @@ from plotly.subplots import make_subplots
 from pca_analysis.peak_picking import (
     get_peak_table_as_df,
 )
-
+from typing import Any
+from pandas import Series
 
 import xarray as xr
 
@@ -52,102 +53,106 @@ class Grid:
         return {k: v for k, v in enumerate(self.cells)}
 
 
-def _draw_subplots_on_grid(subplots, col_wrap: int):
+def _draw_subplots_on_grid(subplots: dict[Any, list], col_wrap: int):
     grid = Grid(n_cells=len(subplots), col_wrap=col_wrap)
     fig = make_subplots(
         rows=grid.n_rows,
         cols=col_wrap,
-        # subplot_titles=subplots.titles,
+        subplot_titles=[str(x) for x in subplots.keys()],
     )
 
-    for subplot_traces, (idx, cell) in zip(subplots, grid.map_flat_grid().items()):
+    for subplot_traces, (idx, cell) in zip(
+        list(subplots.values()), grid.map_flat_grid().items()
+    ):
         fig.add_traces(subplot_traces, rows=cell.row, cols=cell.col)
         assert True
 
     return fig
 
 
-def draw_signal_trace(signal_data, sample, color):
-    signal_trace = go.Scatter(
-        y=signal_data,
-        name="signal",
-        showlegend=False,
-        meta=dict(sample=str(sample)),
-        legendgroup="signal",
-        line_color=color,
-    )
+class PeakPlotTracer:
+    def __init__(self, group_dim, group_key):
+        self.group_dim = str(group_dim)
+        self.group_key = str(group_key)
 
-    return signal_trace
+    def _gen_meta(self, peak_idx):
+        return {self.group_dim: self.group_key, "peak": peak_idx}
 
+    def draw_signal_trace(self, signal_data, color):
+        signal_trace = go.Scatter(
+            y=signal_data,
+            name="signal",
+            showlegend=False,
+            meta=self._gen_meta(peak_idx=None),
+            legendgroup="signal",
+            line_color=color,
+        )
 
-def draw_outline_traces(
-    idx,
-    row,
-    color,
-    sample,
-):
-    outline_trace = go.Scatter(
-        x=[row["left_ip"], row["p_idx"], row["right_ip"]],
-        y=[row["width_height"], row["maxima"], row["width_height"]],
-        name="outline",
-        mode="lines",
-        line_color=color,
-        line_width=1,
-        legendgroup="outline",
-        showlegend=False,
-        meta=dict(peak=int(idx), sample=str(sample)),
-    )
+        return signal_trace
 
-    return outline_trace
+    def draw_outline_traces(
+        self,
+        peak_idx: int,
+        row: Series,
+        color,
+    ):
+        outline_trace = go.Scatter(
+            x=[row["left_ip"], row["p_idx"], row["right_ip"]],
+            y=[row["width_height"], row["maxima"], row["width_height"]],
+            name="outline",
+            mode="lines",
+            line_color=color,
+            line_width=1,
+            legendgroup="outline",
+            showlegend=False,
+            meta=self._gen_meta(peak_idx=peak_idx),
+        )
 
+        return outline_trace
 
-# for color, (idx, row) in zip(self.peak_colors, self.peak_table.iterrows())
+    def draw_peak_width_calc_traces(self, row: Series, color, peak_idx: int):
+        trace = go.Scatter(
+            x=[
+                row["left_ip"],
+                row["right_ip"],
+                None,
+                row["p_idx"],
+                row["p_idx"],
+            ],
+            y=[
+                row["width_height"],
+                row["width_height"],
+                None,
+                row["maxima"],
+                row["width_height"],
+            ],
+            name="width",
+            mode="lines",
+            line_dash="dot",
+            line_width=0.75,
+            line_color=color,
+            legendgroup="width_calc",
+            showlegend=False,
+            meta=self._gen_meta(peak_idx=peak_idx),
+            customdata=[],
+        )
 
+        return trace
 
-def draw_peak_width_calc_traces(row, color, idx, sample):
-    trace = go.Scatter(
-        x=[
-            row["left_ip"],
-            row["right_ip"],
-            None,
-            row["p_idx"],
-            row["p_idx"],
-        ],
-        y=[
-            row["width_height"],
-            row["width_height"],
-            None,
-            row["maxima"],
-            row["width_height"],
-        ],
-        name="width",
-        mode="lines",
-        line_dash="dot",
-        line_width=0.75,
-        line_color=color,
-        legendgroup="width_calc",
-        showlegend=False,
-        meta=dict(peak=int(idx), sample=str(sample)),
-        customdata=[],
-    )
+    def draw_maxima_traces(self, row: Series, color, peak_idx: int):
+        maxima_trace = go.Scatter(
+            x=[row["p_idx"]],
+            y=[row["maxima"]],
+            mode="markers",
+            name="maxima",
+            marker_color=color,
+            marker_size=5,
+            legendgroup="maxima",
+            showlegend=False,
+            meta=self._gen_meta(peak_idx=peak_idx),
+        )
 
-    return trace
-
-
-def draw_maxima_traces(row, color, idx, sample):
-    maxima_trace = go.Scatter(
-        x=[row["p_idx"]],
-        y=[row["maxima"]],
-        mode="markers",
-        name="maxima",
-        marker_color=color,
-        marker_size=5,
-        legendgroup="maxima",
-        showlegend=False,
-        meta=dict(peak=int(idx), sample=str(sample)),
-    )
-
-    return maxima_trace
+        return maxima_trace
 
 
 def _peak_traces(
@@ -163,19 +168,21 @@ def _peak_traces(
     colormap = px.colors.qualitative.Plotly
 
     signal_color = colormap[0]
-    traces = []
-    for key, sample in grpby:
-        grp_traces = []
+    traces: dict[Any, list] = {}
+    for grp_key, sample in grpby:
+        traces_key = f"{group_dim}='{grp_key}'"
+        traces[traces_key] = []
 
         input_signal = sample.squeeze()[input_signal_key].data
 
-        grp_traces.append(
-            draw_signal_trace(
+        ppt = PeakPlotTracer(group_dim=group_dim, group_key=grp_key)
+
+        traces[traces_key] += [
+            ppt.draw_signal_trace(
                 signal_data=input_signal,
-                sample=key,
                 color=signal_color,
             )
-        )
+        ]
 
         peak_colors = colormap[1:]
         peak_table = get_peak_table_as_df(pt=sample.squeeze()[peak_table_key])
@@ -184,31 +191,37 @@ def _peak_traces(
         outline_traces = []
         maxima_traces = []
         width_calc_traces = []
-        for color, (idx, row) in zip(peak_colors, peak_table.iterrows()):
+        for color, (peak_idx, row) in zip(peak_colors, peak_table.iterrows()):
+            if not isinstance(peak_idx, int):
+                raise TypeError
             outline_traces.append(
-                draw_outline_traces(
-                    idx=idx,
+                ppt.draw_outline_traces(
+                    peak_idx=peak_idx,
                     row=row,
                     color=color,
-                    sample=key,
                 )
             )
             maxima_traces.append(
-                draw_maxima_traces(color=color, row=row, idx=int(idx), sample=str(key))
+                ppt.draw_maxima_traces(
+                    color=color,
+                    row=row,
+                    peak_idx=peak_idx,
+                )
             )
 
             width_calc_traces.append(
-                draw_peak_width_calc_traces(
-                    color=color, row=row, idx=int(idx), sample=str(key)
+                ppt.draw_peak_width_calc_traces(
+                    color=color,
+                    row=row,
+                    peak_idx=peak_idx,
                 )
             )
         # adds the traces for all the peaks for the group. Information
         # about what group each trace belongs to is stored internally
         # in name and in metadata.
-        grp_traces += outline_traces
-        grp_traces += maxima_traces
-        grp_traces += width_calc_traces
-        traces.append(grp_traces)
+        traces[traces_key] += outline_traces
+        traces[traces_key] += maxima_traces
+        traces[traces_key] += width_calc_traces
     return traces
 
 
