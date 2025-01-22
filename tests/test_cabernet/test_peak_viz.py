@@ -14,7 +14,6 @@ def subset_samples(cab: Cabernet):
         .isel(sample=slice(0, 5))
         .pick_peaks(
             "input_data",
-            # find_peaks_kwargs=dict(prominence=0.25)
         )
     )
     return subset

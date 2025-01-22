@@ -101,7 +101,11 @@ def tablulate_peaks_1D(
         peak_dict["width_height"],
         peak_dict["left_ip"],
         peak_dict["right_ip"],
-    ) = signal.peak_widths(x=x, peaks=peak_dict["p_idx"], **peak_widths_kwargs)
+    ) = signal.peak_widths(
+        x=x,
+        peaks=peak_dict["p_idx"],
+        **peak_widths_kwargs,
+    )
 
     peak_table = pd.DataFrame(peak_dict).rename_axis("peak", axis=0)
 
@@ -135,7 +139,7 @@ class PeakPicker:
         self,
         core_dim: str | list = "",
         find_peaks_kwargs=dict(),
-        peak_widths_kwargs=dict(),
+        peak_widths_kwargs=dict(rel_height=1),
         x_key: str = "",
     ) -> None:
         peak_tables = []

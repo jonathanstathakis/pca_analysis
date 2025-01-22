@@ -325,7 +325,9 @@ class Cabernet(AbstChrom):
 
         return df
 
-    def pick_peaks(self, path: StrOrPath, find_peaks_kwargs={}, peak_width_kwargs={}):
+    def pick_peaks(
+        self, path: StrOrPath, find_peaks_kwargs={}, peak_width_kwargs={"rel_height": 1}
+    ):
         """
         Map the peaks of the DataArray at `path`, adding the map as a DataArray at "{path} / 'peaks'", returning a copy
         Cabernet object with the peak map.
