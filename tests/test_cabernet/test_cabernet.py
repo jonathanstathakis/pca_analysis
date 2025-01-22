@@ -77,11 +77,8 @@ def test_cab_sel_returns_shiraz(cab: Cabernet):
     test that sel correctly subsets.
     """
     selected_sample = 7
-    result = cab.sel(sample=selected_sample)["sample"]
-    if isinstance(result, Shiraz):
-        assert len(result) == 2
-    else:
-        raise TypeError
+    result = cab.sel(sample=selected_sample)["input_data"]
+    assert isinstance(result, Shiraz)
 
 
 def test_cab_sel_returns_cabernet(cab: Cabernet):
