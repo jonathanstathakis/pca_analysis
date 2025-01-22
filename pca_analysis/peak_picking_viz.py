@@ -61,6 +61,9 @@ class PeakPlotTracer:
     def _gen_meta(self, peak_idx):
         return {self.group_dim: self.group_key, "peak": peak_idx}
 
+    def _hovertemplate(self):
+        return "mins: %{x}<br>signal: %{y}<br>peak_num: %{customdata[0]}"
+
     def draw_signal_trace(self, signal_x, signal_y, color):
         signal_trace = go.Scatter(
             x=signal_x,
@@ -90,6 +93,8 @@ class PeakPlotTracer:
             legendgroup="outline",
             showlegend=False,
             meta=self._gen_meta(peak_idx=peak_idx),
+            customdata=[[row.name]],
+            hovertemplate=self._hovertemplate(),
         )
 
         return outline_trace
@@ -118,7 +123,8 @@ class PeakPlotTracer:
             legendgroup="width_calc",
             showlegend=False,
             meta=self._gen_meta(peak_idx=peak_idx),
-            customdata=[],
+            customdata=[[row.name]],
+            hovertemplate=self._hovertemplate(),
         )
 
         return trace
@@ -134,6 +140,8 @@ class PeakPlotTracer:
             legendgroup="maxima",
             showlegend=False,
             meta=self._gen_meta(peak_idx=peak_idx),
+            customdata=[[row.name]],
+            hovertemplate=self._hovertemplate(),
         )
 
         return maxima_trace

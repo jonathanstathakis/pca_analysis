@@ -10,8 +10,8 @@ xr.set_options(display_expand_data=False, display_expand_coords=False)
 @pytest.fixture
 def subset_samples(cab: Cabernet):
     subset = (
-        cab.sel(wavelength=256)
-        .isel(sample=slice(0, 5), mins=slice(0, 30))
+        cab.sel(wavelength=256, mins=slice(0, 30))
+        .isel(sample=slice(0, 5))
         .pick_peaks(
             "input_data",
             # find_peaks_kwargs=dict(prominence=0.25)
