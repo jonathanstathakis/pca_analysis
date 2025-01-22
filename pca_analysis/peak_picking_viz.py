@@ -7,7 +7,7 @@ from pca_analysis.peak_picking import (
 )
 from typing import Any
 from pandas import Series
-
+from itertools import cycle
 import xarray as xr
 
 
@@ -93,7 +93,7 @@ class PeakPlotTracer:
             legendgroup="outline",
             showlegend=False,
             meta=self._gen_meta(peak_idx=peak_idx),
-            customdata=[[row.name]],
+            customdata=[[peak_idx]],
             hovertemplate=self._hovertemplate(),
         )
 
@@ -123,7 +123,7 @@ class PeakPlotTracer:
             legendgroup="width_calc",
             showlegend=False,
             meta=self._gen_meta(peak_idx=peak_idx),
-            customdata=[[row.name]],
+            customdata=[[peak_idx]],
             hovertemplate=self._hovertemplate(),
         )
 
@@ -140,7 +140,7 @@ class PeakPlotTracer:
             legendgroup="maxima",
             showlegend=False,
             meta=self._gen_meta(peak_idx=peak_idx),
-            customdata=[[row.name]],
+            customdata=[[peak_idx]],
             hovertemplate=self._hovertemplate(),
         )
 
@@ -179,14 +179,20 @@ def _peak_traces(
             )
         ]
 
-        peak_colors = colormap[1:]
+        peak_colors = cycle(colormap[1:])
+
         peak_table = get_peak_table_as_df(pt=sample.squeeze()[peak_table_key])
 
         # each iteration draws the traces for one peak.
         outline_traces = []
         maxima_traces = []
         width_calc_traces = []
-        for color, (peak_idx, row) in zip(peak_colors, peak_table.iterrows()):
+
+        peaks_iterated = []
+
+        for peak_idx, row in peak_table.iterrows():
+            color = next(peak_colors)
+            peaks_iterated.append(peak_idx)
             if not isinstance(peak_idx, int):
                 raise TypeError
             outline_traces.append(
