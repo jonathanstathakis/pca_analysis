@@ -71,3 +71,7 @@ log_date_format = "%Y-%m-%d %H:%M:%S"
 [tool.poetry.scripts]
 test_pipeline_cache = "tests.test_pipeline._test_pipeline_cache:start"
 create_test_database = "tests.create_database_etl_db:create_database"
+
+[tool.ruff.lint]
+select = ["ALL"]
+line-length = 120
