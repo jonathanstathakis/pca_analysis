@@ -74,4 +74,4 @@ create_test_database = "tests.create_database_etl_db:create_database"
 
 [tool.ruff.lint]
 select = ["ALL"]
-line-length = 120
+line-length = 80
