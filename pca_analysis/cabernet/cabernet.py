@@ -132,6 +132,7 @@ class VizCabernet(AbstChrom):
         self,
         signal_path: StrOrPath,
         peaks_path: StrOrPath,
+        group_dim: str = "",
         peak_outlines: bool = True,
         peak_width_calc: bool = True,
     ):
@@ -156,8 +157,11 @@ class VizCabernet(AbstChrom):
         assert isinstance(signal_array, DataArray)
 
         fig = plot_peaks(
-            peak_table=pdf,
-            input_signal=signal_array.data,
+            ds=self._dt.to_dataset(),
+            x=self.TIME,
+            group_dim=group_dim,
+            input_signal_key=signal_path,
+            peak_table_key=peaks_path,
             peak_outlines=peak_outlines,
             peak_width_calc=peak_width_calc,
         )

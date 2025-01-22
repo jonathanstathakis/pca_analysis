@@ -10,6 +10,8 @@ from pandas import Series
 from itertools import cycle
 import xarray as xr
 
+PEAK_TABLE_DIMS = ["peak", "property"]
+
 
 class Cell:
     def __init__(self, row, col):
@@ -195,13 +197,15 @@ def _peak_traces(
             peaks_iterated.append(peak_idx)
             if not isinstance(peak_idx, int):
                 raise TypeError
-            outline_traces.append(
-                ppt.draw_outline_traces(
-                    peak_idx=peak_idx,
-                    row=row,
-                    color=color,
+
+            if draw_peak_outlines:
+                outline_traces.append(
+                    ppt.draw_outline_traces(
+                        peak_idx=peak_idx,
+                        row=row,
+                        color=color,
+                    )
                 )
-            )
             maxima_traces.append(
                 ppt.draw_maxima_traces(
                     color=color,
@@ -210,13 +214,14 @@ def _peak_traces(
                 )
             )
 
-            width_calc_traces.append(
-                ppt.draw_peak_width_calc_traces(
-                    color=color,
-                    row=row,
-                    peak_idx=peak_idx,
+            if draw_peak_width_calc:
+                width_calc_traces.append(
+                    ppt.draw_peak_width_calc_traces(
+                        color=color,
+                        row=row,
+                        peak_idx=peak_idx,
+                    )
                 )
-            )
         # adds the traces for all the peaks for the group. Information
         # about what group each trace belongs to is stored internally
         # in name and in metadata.
@@ -228,11 +233,13 @@ def _peak_traces(
 
 def plot_peaks(
     ds: xr.Dataset,
-    x: str = "",
+    x: str,
     group_dim: str = "",
     col_wrap: int = 1,
     input_signal_key: str = "",
     peak_table_key: str = "",
+    peak_outlines: bool = True,
+    peak_width_calc: bool = True,
 ):
     """
     Draw the input signal overlaid with the peaks present in peak table
@@ -263,19 +270,43 @@ def plot_peaks(
     assert isinstance(peak_table_key, str)
     assert isinstance(x, str)
 
+    if group_dim and group_dim not in list(ds.dims.keys()):
+        raise ValueError(f"{group_dim=} not found in dims: {list(ds.dims.keys())}")
+
+    if not group_dim:
+        # if no group_dim is passed, the datarray can only have 1 dim: x. This means that
+        # when excluding the peak table dims the only dim left is x. # this means we
+        # need x.
+        dims = list(ds.dims.keys())
+        dims = [x for x in dims if x not in PEAK_TABLE_DIMS]
+        if len(dims) != 1 or dims[0] != x:
+            raise ValueError(
+                "if no `group_dim` is passed, expect ds to have 1 dim when excluding the peak table dims."
+            )
+        ds = ds.expand_dims("temp")
+        group_dim = "temp"
+
     subplots = _peak_traces(
         ds=ds,
         x=x,
         group_dim=group_dim,
         input_signal_key=input_signal_key,
         peak_table_key=peak_table_key,
+        draw_peak_outlines=peak_outlines,
+        draw_peak_width_calc=peak_width_calc,
     )
 
     grid = Grid(n_cells=len(subplots), col_wrap=col_wrap)
+
+    if group_dim == "temp":
+        subplot_titles = None
+    else:
+        subplot_titles = [str(x) for x in subplots.keys()]
+
     fig = make_subplots(
         rows=grid.n_rows,
         cols=col_wrap,
-        subplot_titles=[str(x) for x in subplots.keys()],
+        subplot_titles=subplot_titles,
         x_title=x,
         y_title=input_signal_key,
     )
@@ -288,18 +319,18 @@ def plot_peaks(
 
     titletext = f"'{input_signal_key}' peaks"
 
-    if group_dim:
+    if group_dim and group_dim != "temp":
         titletext += f" faceted by '{group_dim}'"
 
     fig.update_layout(title_text=titletext)
 
-    sample_0 = fig.data[0]["meta"]["sample"]
+    sample_0 = fig.data[0]["meta"][group_dim]
 
     # show legend for first peak trace markers
     fig.for_each_trace(
         lambda trace: trace.update(showlegend=True)
         if "peak" in trace["meta"]
-        and trace.meta["sample"] == sample_0
+        and trace.meta[group_dim] == sample_0
         and trace.meta["peak"] == 0
         else ()
     )
@@ -307,7 +338,7 @@ def plot_peaks(
     # show legend for first signal
     fig.for_each_trace(
         lambda trace: trace.update(showlegend=True)
-        if trace.name == "signal" and trace.meta["sample"] == sample_0
+        if trace.name == "signal" and trace.meta[group_dim] == sample_0
         else trace
     )
 
