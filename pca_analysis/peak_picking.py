@@ -59,14 +59,15 @@ def find_peaks(
 
 
 def tablulate_peaks_1D(
-    x, find_peaks_kwargs=dict(), peak_widths_kwargs=dict(rel_height=0.95)
-):
+    x,
+    find_peaks_kwargs=dict(),
+    peak_widths_kwargs=dict(rel_height=0.95),
+    timestep: float = -1,
+) -> pd.DataFrame:
     """
     Generate a peak table for a 1D input signal x.
 
     TODO4 test
-
-    TODO decide how to model the peak information within an xarray context. options are either to return a pandas dataframe, a data array, or label the input array.
 
     Parameters
     ----------
@@ -77,6 +78,18 @@ def tablulate_peaks_1D(
         kwargs for `scipy.signal.find_peaks`
     peak_widths_kwargs: dict
         kwargs for `scipy.signal.peak_widths`
+
+    Returns
+    -------
+    pd.DataFrame
+        A pandas DataFrame representing the peak table with columns:
+        "p_idx", "maxima", "width", "width_height", "left_ip", and
+        "right_ip", and index "peak". "peak" is the numeric order of the
+        peaks, starting at 0, and also the row index. "p_idx" is the indice
+        of the peak maxima in the input `x`, "maxima" is the magnitude of the
+        signal at "p_idx", "width" is the interpolatd length of the peak in in index units, "width_height" is the interpolated magnitude of the signal at the point at which the width is measured, "left_ip" and "right_ip" is the interpolated intersection point of the width measurement with the signal.
+
+
     """
     peak_dict = dict()
 
@@ -92,11 +105,21 @@ def tablulate_peaks_1D(
 
     peak_table = pd.DataFrame(peak_dict).rename_axis("peak", axis=0)
 
+    # add a timestep x column to provide the values in time units
+    peak_table = peak_table.assign(**{"maxima_x": lambda x: x["p_idx"]})
+
+    # convert idx units to mins
+    for key in ["width", "left_ip", "right_ip", "maxima_x"]:
+        peak_table = peak_table.assign(**{key: lambda a: a[key] * timestep})
+
     return peak_table
 
 
 class PeakPicker:
-    def __init__(self, da):
+    def __init__(
+        self,
+        da,
+    ):
         """
         peak picker for XArray DataArrays.
         """
@@ -113,11 +136,11 @@ class PeakPicker:
         core_dim: str | list = "",
         find_peaks_kwargs=dict(),
         peak_widths_kwargs=dict(),
+        x_key: str = "",
     ) -> None:
         peak_tables = []
 
-        # if x is not an iterable, make it so, so we can iterate over it. This is because x
-        # can optionally be an iterable.
+        # if x is not an iterable, make it so, so we can iterate over it. This is because x can optionally be an iterable.
 
         da = self._da
 
@@ -138,11 +161,17 @@ class PeakPicker:
 
         self._pt_idx_cols += group_cols
 
+        if x_key:
+            timestep = da[x_key].diff(x_key).mean().item()
+        else:
+            timestep = -1
+
         # for each group in grouper get the group label and group
         for grp_label, group in da.groupby(group_cols):
             # generate the peak table for the current group
             peak_table = tablulate_peaks_1D(
                 x=group.squeeze(),
+                timestep=timestep,
                 find_peaks_kwargs=find_peaks_kwargs,
                 peak_widths_kwargs=peak_widths_kwargs,
             )

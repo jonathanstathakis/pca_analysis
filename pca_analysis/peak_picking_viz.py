@@ -53,23 +53,6 @@ class Grid:
         return {k: v for k, v in enumerate(self.cells)}
 
 
-def _draw_subplots_on_grid(subplots: dict[Any, list], col_wrap: int):
-    grid = Grid(n_cells=len(subplots), col_wrap=col_wrap)
-    fig = make_subplots(
-        rows=grid.n_rows,
-        cols=col_wrap,
-        subplot_titles=[str(x) for x in subplots.keys()],
-    )
-
-    for subplot_traces, (idx, cell) in zip(
-        list(subplots.values()), grid.map_flat_grid().items()
-    ):
-        fig.add_traces(subplot_traces, rows=cell.row, cols=cell.col)
-        assert True
-
-    return fig
-
-
 class PeakPlotTracer:
     def __init__(self, group_dim, group_key):
         self.group_dim = str(group_dim)
@@ -78,9 +61,10 @@ class PeakPlotTracer:
     def _gen_meta(self, peak_idx):
         return {self.group_dim: self.group_key, "peak": peak_idx}
 
-    def draw_signal_trace(self, signal_data, color):
+    def draw_signal_trace(self, signal_x, signal_y, color):
         signal_trace = go.Scatter(
-            y=signal_data,
+            x=signal_x,
+            y=signal_y,
             name="signal",
             showlegend=False,
             meta=self._gen_meta(peak_idx=None),
@@ -97,7 +81,7 @@ class PeakPlotTracer:
         color,
     ):
         outline_trace = go.Scatter(
-            x=[row["left_ip"], row["p_idx"], row["right_ip"]],
+            x=[row["left_ip"], row["maxima_x"], row["right_ip"]],
             y=[row["width_height"], row["maxima"], row["width_height"]],
             name="outline",
             mode="lines",
@@ -116,8 +100,8 @@ class PeakPlotTracer:
                 row["left_ip"],
                 row["right_ip"],
                 None,
-                row["p_idx"],
-                row["p_idx"],
+                row["maxima_x"],
+                row["maxima_x"],
             ],
             y=[
                 row["width_height"],
@@ -141,7 +125,7 @@ class PeakPlotTracer:
 
     def draw_maxima_traces(self, row: Series, color, peak_idx: int):
         maxima_trace = go.Scatter(
-            x=[row["p_idx"]],
+            x=[row["maxima_x"]],
             y=[row["maxima"]],
             mode="markers",
             name="maxima",
@@ -157,6 +141,7 @@ class PeakPlotTracer:
 
 def _peak_traces(
     ds: xr.Dataset,
+    x: str,
     group_dim: str,
     draw_peak_outlines: bool = True,
     draw_peak_width_calc: bool = True,
@@ -173,13 +158,15 @@ def _peak_traces(
         traces_key = f"{group_dim}='{grp_key}'"
         traces[traces_key] = []
 
-        input_signal = sample.squeeze()[input_signal_key].data
+        signal_x = sample.squeeze()[x]
+        signal_y = sample.squeeze()[input_signal_key].data
 
         ppt = PeakPlotTracer(group_dim=group_dim, group_key=grp_key)
 
         traces[traces_key] += [
             ppt.draw_signal_trace(
-                signal_data=input_signal,
+                signal_x=signal_x,
+                signal_y=signal_y,
                 color=signal_color,
             )
         ]
@@ -227,6 +214,7 @@ def _peak_traces(
 
 def plot_peaks(
     ds: xr.Dataset,
+    x: str = "",
     group_dim: str = "",
     col_wrap: int = 1,
     input_signal_key: str = "",
@@ -259,15 +247,30 @@ def plot_peaks(
     assert col_wrap > 0
     assert isinstance(input_signal_key, str)
     assert isinstance(peak_table_key, str)
+    assert isinstance(x, str)
 
     subplots = _peak_traces(
         ds=ds,
+        x=x,
         group_dim=group_dim,
         input_signal_key=input_signal_key,
         peak_table_key=peak_table_key,
     )
 
-    fig = _draw_subplots_on_grid(subplots=subplots, col_wrap=col_wrap)
+    grid = Grid(n_cells=len(subplots), col_wrap=col_wrap)
+    fig = make_subplots(
+        rows=grid.n_rows,
+        cols=col_wrap,
+        subplot_titles=[str(x) for x in subplots.keys()],
+        x_title=x,
+        y_title=input_signal_key,
+    )
+
+    for subplot_traces, (idx, cell) in zip(
+        list(subplots.values()), grid.map_flat_grid().items()
+    ):
+        fig.add_traces(subplot_traces, rows=cell.row, cols=cell.col)
+        assert True
 
     titletext = f"'{input_signal_key}' peaks"
 

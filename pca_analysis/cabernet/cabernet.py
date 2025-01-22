@@ -171,16 +171,13 @@ class Cabernet(AbstChrom):
         Manager of data processes. Create a branched Tree of data transformations and
         mappings through a declarative(?) API utilising a XArray DataTree backend.
 
-        TODO add peak picking
         TODO add smoothing
         TODO add sharpening
         TODO add clustering
         TODO add PARAFAC2
 
         TODO2 add sklearn pipeline
-        TODO2 explore a polars style API for piping and constructing a branch at the
-        same time. Need a method of avoiding having to write the parent path every
-        time.
+        TODO2 explore a polars style API for piping and constructing a branch at the same time. Need a method of avoiding having to write the parent path every time.
         """
 
         assert isinstance(da, DataArray), f"{type(da)}"

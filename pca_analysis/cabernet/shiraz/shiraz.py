@@ -82,6 +82,7 @@ class Shiraz(AbstChrom):
             core_dim=self.CORE_DIM,
             find_peaks_kwargs=find_peaks_kwargs,
             peak_widths_kwargs=peak_width_kwargs,
+            x_key=self.TIME,
         )
         arr = pp.dataarray
         arr = arr.assign_attrs(dict(_data_model_type="peaks"))

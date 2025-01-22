@@ -24,6 +24,7 @@ def subset_samples(cab: Cabernet):
 def peak_map_figure_faceting(subset_samples: Cabernet):
     fig = plot_peaks(
         ds=subset_samples._dt.to_dataset(),
+        x="mins",
         group_dim="sample",
         col_wrap=2,
         input_signal_key="input_data",
